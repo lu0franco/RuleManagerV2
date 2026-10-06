@@ -563,4 +563,35 @@ Public Class Rules
 
     End Sub
 
+    ' ============================================
+    ' OPCIONES DEL ADDIN
+    ' ============================================
+    Public Shared Sub EjecutarOpciones(
+        invApp As Inventor.Application)
+
+        Try
+            Using dlg As New OptionsDialog()
+
+                ' Centrar sobre la ventana principal de Inventor
+                Dim hwnd As IntPtr = IntPtr.Zero
+                Try
+                    hwnd = New IntPtr(invApp.MainFrameHWND)
+                Catch
+                End Try
+
+                If hwnd <> IntPtr.Zero Then
+                    dlg.ShowDialog(New WindowWrapper(hwnd))
+                Else
+                    dlg.ShowDialog()
+                End If
+
+            End Using
+
+        Catch ex As Exception
+            MsgBox("Error al abrir Opciones: " & ex.Message,
+                   MsgBoxStyle.Critical, "Error")
+        End Try
+
+    End Sub
+
 End Class

@@ -270,7 +270,14 @@ Public Class StartupTasks
     ' CREAR ESTRUCTURA DE CARPETAS
     ' =========================================================
     Private Shared Sub CrearEstructuraCarpetas()
+
         Try
+            ' === NUEVO: RESPETAR OPCION DEL USUARIO ===
+            If Not AddinSettings.Current.CrearCarpetasProyecto Then
+                DebugPrint("Creacion de carpetas deshabilitada en OPCIONES. Se omite.")
+                Exit Sub
+            End If
+
             Dim proj As DesignProject = _invApp.DesignProjectManager.ActiveDesignProject
             If proj Is Nothing Then
                 DebugPrint("No hay proyecto activo para crear carpetas")

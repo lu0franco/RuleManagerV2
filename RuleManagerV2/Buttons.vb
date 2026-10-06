@@ -229,6 +229,14 @@ Public Class Buttons
             AddressOf Rules.EjecutarOrganizarProyecto,
             "icon_10_print_b3_ext_wide_32x32.png"))
 
+        _buttonsData.Add(New ButtonData(
+            "OPCIONES",
+            "BTN_OPCIONES",
+            "Configura el comportamiento del addin RuleManager.",
+            "ZeroDoc",
+            AddressOf Rules.EjecutarOpciones,
+            "icon_10_print_b3_ext_wide_32x32.png"))
+
     End Sub
 
 
@@ -365,6 +373,9 @@ Public Class Buttons
         End Try
 
     End Sub
+
+
+
 
     Private Function LoadIcon(
         fileName As String) As Object
