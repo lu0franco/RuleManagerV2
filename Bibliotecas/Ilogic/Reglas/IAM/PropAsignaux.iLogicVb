@@ -1,0 +1,15 @@
+﻿' Declarar las variables necesarias
+Sub Main()
+Dim ensamblaje As Document
+ensamblaje = ThisApplication.ActiveDocument
+Dim descripcion As String
+Dim Cliente As String
+Dim Proyectista As String
+standardProperties = ensamblaje.PropertySets.Item("Design Tracking Properties")
+descripcion = standardProperties.Item("Project").Value
+Cliente = standardProperties.Item("Vendor").Value
+Proyectista = standardProperties.Item("Designer").Value
+SharedVariable("descripcion") = descripcion
+SharedVariable("Cliente") = Cliente
+SharedVariable("Proyectista") = Proyectista
+End Sub 

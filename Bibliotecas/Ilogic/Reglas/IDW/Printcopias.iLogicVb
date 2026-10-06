@@ -1,0 +1,29 @@
+﻿Sub Main()
+    ' Obtén el documento del dibujo activo
+    Dim oDrawingDoc As DrawingDocument = ThisApplication.ActiveDocument
+
+    ' Configurar el gestor de impresión (opcional)
+    Dim oPrintMgr As PrintManager = oDrawingDoc.PrintManager
+    oPrintMgr.ScaleMode = PrintScaleModeEnum.kPrintBestFitScale
+    oPrintMgr.Printer = "PDF-XChange Standard" ' Asegúrate de que el nombre de la impresora sea correcto
+
+    ' Itera sobre todas las hojas del dibujo
+    For Each oSheet As Sheet In oDrawingDoc.Sheets
+        If Not InStr(oSheet.Name, "Copia") > 0 Then
+            oSheet.ExcludeFromPrinting= True
+        End If
+    Next
+    oPrintMgr.PaperSize = kPaperSizeCustom
+    oPrintMgr.PaperHeight = 35.6
+    oPrintMgr.PaperWidth = 21.6
+        ' Crear un nuevo rango de impresión
+        oPrintMgr.PrintRange = kPrintAllSheets
+
+        ' Imprimir la hoja actual
+        oPrintMgr.SubmitPrint()
+
+    For Each oSheet As Sheet In oDrawingDoc.Sheets
+            oSheet.ExcludeFromPrinting= False
+    Next
+End Sub
+

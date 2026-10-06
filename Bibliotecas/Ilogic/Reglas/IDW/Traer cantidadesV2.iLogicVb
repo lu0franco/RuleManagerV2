@@ -1,0 +1,75 @@
+﻿Sub Main()
+'====== SETTINGS ==============
+Dim sCname As String = "CANTIDAD_USADA"
+Dim sCname1 As String = "MATERIAL_PLANO"
+Dim sPrefix As String = ": "
+Dim corteSheetName As String = "CORTE"
+'====== END SETTINGS ==============
+
+Dim oDrw As DrawingDocument = ThisDoc.Document
+Dim hoja As Sheet = oDrw.ActiveSheet
+If Not hoja.Name.Contains(corteSheetName) Then
+
+	MsgBox("La hoja no es de '" & corteSheetName & "' ejecute la regla en una hoja de CORTE.", vbExclamation)
+	Exit Sub
+End If
+' Acceder correctamente al StylesManager
+Dim stylesMgr As DrawingStylesManager = oDrw.StylesManager
+Dim corteStyle As TextStyle = Nothing
+Dim estiloNombre As String = "CorteStyle"
+
+Try
+	corteStyle = stylesMgr.TextStyles.Item(estiloNombre)
+Catch
+	' Si no existe, clonamos uno existente
+	Dim baseStyle As TextStyle = stylesMgr.TextStyles.Item("Texto de identificador 3.5(ISO)") ' usa el primero como base
+	corteStyle = baseStyle.Copy(estiloNombre)
+	corteStyle.FontSize = 5 ' tamaño personalizado solo para la hoja CORTE
+End Try
+
+Dim cotashoja As DimensionStyle = stylesMgr.DimensionStyles.Item("COTAS DE CORTE")
+    For Each oDim As GeneralDimension In hoja.DrawingDimensions
+        If oDim.Style.Name <> dimStyleName Then
+            oDim.Style = cotashoja
+            updatedCount += 1
+        End If
+    Next
+' Procesar vistas en la hoja CORTE
+For Each oView As DrawingView In hoja.DrawingViews
+	' Verificar si ya está en escala 1:1
+	If Math.Round(oView.Scale, 3) <> 1 Then
+		Try
+			oView.Scale = 1
+			vistasAjustadas += 1
+		Catch ex As Exception
+			MsgBox("No se pudo ajustar la vista: " & oView.Name)
+		End Try
+	End If
+	Dim oLbl As DrawingViewLabel = oView.Label
+	Dim searchstr As String = oLbl.FormattedText.ToString
+	oLbl.TextStyle = corteStyle
+	If Not searchstr.Contains("CANT") Then
+		Try
+			Dim sCant As String = sPrefix & "<Property Document='model' PropertySet='User Defined Properties' Property='" & sCname & "' FormatID='{D5CDD505-2E9C-101B-9397-08002B2CF9AE}'>" & sCname & "</Property>"
+			Dim sMat As String = "<Property Document='model' PropertySet='User Defined Properties' Property='" & sCname1 & "' FormatID='{D5CDD505-2E9C-101B-9397-08002B2CF9AE}'>" & sCname1 & "</Property>"
+			Dim STotal As String = sMat & vbLf & "CANT" & sCant & vbLf
+
+			Dim Pos As Integer = InStr(oLbl.FormattedText, "*")
+			If Pos > 0 Then
+				oLbl.FormattedText = oLbl.FormattedText.Remove(Pos - 1, 1)
+				oLbl.TextStyle = corteStyle
+				oLbl.FormattedText = oLbl.FormattedText & STotal
+			End If
+		Catch
+			' opcional: MsgBox("Error en la vista " & oView.Name)
+		End Try
+	End If
+	oView.ShowLabel = True
+Next
+If vistasAjustadas > 0 Then
+	MsgBox("Se ajustaron " & vistasAjustadas & " vistas a escala 1:1.", vbInformation, "Escala aplicada")
+Else
+	MsgBox("Todas las vistas ya estaban en 1:1.", vbInformation, "Nada que hacer")
+End If
+MsgBox("Se realizó la revisión de CANT y MAT en la hoja '" & corteSheetName & "'.", vbInformation, "Mensaje")
+End Sub

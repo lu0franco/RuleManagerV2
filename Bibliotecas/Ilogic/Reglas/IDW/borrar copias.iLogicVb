@@ -1,0 +1,14 @@
+﻿' Regla de iLogic para verificar propiedades CYP y MEC en todas las hojas de un dibujo
+Sub Main
+' Obtén el documento del dibujo activo
+Dim oDrawingDoc As DrawingDocument = ThisApplication.ActiveDocument
+
+
+Dim oSheet As Sheet
+For Each oSheet In oDrawingDoc.Sheets
+			If  oSheet.Name.Contains("Copia") Then
+			
+			oSheet.Delete
+		End If
+	Next
+End Sub

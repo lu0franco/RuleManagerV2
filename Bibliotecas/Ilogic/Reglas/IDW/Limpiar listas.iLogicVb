@@ -1,0 +1,12 @@
+﻿Sub Main
+	Dim oDDoc As DrawingDocument = ThisApplication.ActiveDocument
+	For Each hoja As Sheet In oDDoc.Sheets
+		For Each ooPartsList As PartsList In hoja.PartsLists
+			If ooPartsList.Style Is oDDoc.StylesManager.PartsListStyles.Item("LDM") Or ooPartsList.Style Is oDDoc.StylesManager.PartsListStyles.Item("LDMARM") Then
+				Dim oPartsList As PartsList = ooPartsList
+				oPartsList.Delete()
+			End If
+		Next
+	Next
+End Sub
+

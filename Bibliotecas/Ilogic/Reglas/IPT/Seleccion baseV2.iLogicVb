@@ -1,0 +1,277 @@
+﻿Imports System.Windows.Forms
+'=========================================================
+'  SELECCION BASE v3  –  sin GoTo, respeta desarrollo plano
+'=========================================================
+
+Sub Main()
+	Dim timer As New System.Timers.Timer(1)   '1 ms = apenas entra
+	AddHandler timer.Elapsed, AddressOf OnTimedEvent
+	timer.AutoReset = False
+	timer.Start()
+End Sub
+
+'---------------------------------------------------------
+' Evento que se ejecuta tras el timer
+'---------------------------------------------------------
+Sub OnTimedEvent(sender As Object, e As System.Timers.ElapsedEventArgs)
+
+	Dim oDoc As Document = ThisApplication.ActiveEditDocument
+	Dim customProps As PropertySet = oDoc.PropertySets.Item("Inventor User Defined Properties")
+	Dim oMaterialAsset As Inventor.AssetLibrary
+	Dim addData As String
+	Dim Listsel As New List(Of String)
+	Listsel = New List(Of String) From {"CHAPA", "PLANCHA", "CUADRADO", "REDONDO", "GUIA", "GENERICO"}
+
+	Dim oWhatToRun As String = Forma(Listsel)
+
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	' CHAPA
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	If oWhatToRun = "CHAPA" Then
+		oMaterialAsset = ThisApplication.AssetLibraries.Item("METALES DB")
+		ThisApplication.ActiveMaterialLibrary = oMaterialAsset
+
+			'====  ANTI-BORRADO 1: SubType  ====
+		Dim yaEsChapa As Boolean = (oDoc.SubType = "{9C464203-9BAE-11D3-8BAD-0060B0CE6BB4}")
+		If Not yaEsChapa Then oDoc.SubType = "{9C464203-9BAE-11D3-8BAD-0060B0CE6BB4}"
+
+		Listsel = New List(Of String) From {"Milímetros", "Pulgadas"}
+		Dim oChoseUnits As String = Forma(Listsel)
+
+		If oChoseUnits = "Milímetros" Then
+			Listsel = New List(Of String) From {"0.3mm", "0.4mm", "0.5mm", "0.8mm", "1mm", "1.2mm", "1.5mm", "2mm", "2mm (Nº14)", "2.5mm", "2.95mm", "3mm", "3.4mm", "4mm", "5mm", "6mm", "8mm", "10mm", "12mm", "16mm", "20mm", "25mm"}
+		Else
+			Listsel = New List(Of String) From {"1/4"" (6.35mm)", "5/16"" (7.94mm)", "3/8"" (9.53mm)", "1/2"" (12.70mm)", "5/8"" (15.88mm)", "3/4"" (19.10mm)", "7/8"" (22.22mm)", "1"" (25.4mm)", "1 1/4"" (31.75mm)", "1 1/2"" (38.1mm)"}
+		End If
+
+		Dim estiloElegido As String = Forma(Listsel)
+
+		'====  LÓGICA ANTI-REGENERACIÓN  ====
+		Dim smDef As SheetMetalComponentDefinition = oDoc.ComponentDefinition
+		Dim debeCambiarEstilo As Boolean = True
+
+		If smDef.HasFlatPattern AndAlso smDef.FlatPattern IsNot Nothing Then
+			If SheetMetal.GetActiveStyle() = estiloElegido Then
+				debeCambiarEstilo = False   'todo coincide → no tocamos nada
+			End If
+		End If
+
+		If debeCambiarEstilo Then
+			SheetMetal.SetActiveStyle(estiloElegido)
+		End If
+		'====================================
+
+		'Material
+		Listsel.Clear()
+		Dim Materials As AssetsEnumerator = oMaterialAsset.MaterialAssets
+		For Each A As Asset In Materials
+			Listsel.Add(A.DisplayName)
+		Next
+		Listsel.Sort()
+		iProperties.Material = Forma(Listsel)
+
+		addData = oWhatToRun
+		Dim propMAT_PLANO As [Property] = GetOrCreateProperty(customProps, "MATERIAL_PLANO")
+		propMAT_PLANO.Value = "=<MATERIAL_BASE> <SHEET METAL RULE> <MATERIAL>"
+
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	' PLANCHA
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	ElseIf oWhatToRun = "PLANCHA" Then
+		oMaterialAsset = ThisApplication.AssetLibraries.Item("PLASTICOS DB")
+		ThisApplication.ActiveMaterialLibrary = oMaterialAsset
+		oDoc.SubType = "{9C464203-9BAE-11D3-8BAD-0060B0CE6BB4}"
+
+		Listsel = New List(Of String) From {"2mm", "3mm", "4mm", "6mm", "8mm", "10mm", "12mm", "15mm", "16mm", "20mm", "25mm", "30mm", "35mm", "40mm", "50mm", "60mm", "64mm", "65mm"}
+		SheetMetal.SetActiveStyle(Forma(Listsel))
+
+		Listsel.Clear()
+		Dim Materials As AssetsEnumerator = oMaterialAsset.MaterialAssets
+		For Each A As Asset In Materials
+			Listsel.Add(A.DisplayName)
+		Next
+		Listsel.Sort()
+		iProperties.Material = Forma(Listsel)
+
+		addData = oWhatToRun
+		Dim propMAT_PLANO As [Property] = GetOrCreateProperty(customProps, "MATERIAL_PLANO")
+		propMAT_PLANO.Value = "=<MATERIAL_BASE> <SHEET METAL RULE> <MATERIAL>"
+
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	' CUADRADO
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	ElseIf oWhatToRun = "CUADRADO" Then
+		Listsel = New List(Of String) From {"TREFILADO", "LAMINADO", "PLASTICO"}
+		Dim checktype As String = Forma(Listsel)
+		If checktype = "PLASTICO" Then
+			oMaterialAsset = ThisApplication.AssetLibraries.Item("PLASTICOS DB")
+		Else
+			oMaterialAsset = ThisApplication.AssetLibraries.Item("METALES DB")
+		End If
+		ThisApplication.ActiveMaterialLibrary = oMaterialAsset
+		oDoc.SubType = "{4D29B490-49B2-11D0-93C3-7E0706000000}"
+
+		Listsel = New List(Of String) From {"3/16"" (4.76mm)", "1/4"" (6.35mm)", "5/16"" (7.94mm)", "3/8"" (9.53mm)", "12mm", "1/2"" (12.70mm)", "5/8"" (15.88mm)", "3/4"" (19.10mm)", "20mm", "7/8"" (22.22mm)", "1"" (25.4mm)", "30mm", "1 1/4"" (31.75mm)", "1 1/2"" (38.1mm)", "40mm", "1 3/4"" (44.45mm)", "45mm", "2"" (50.80mm)", "60mm", "2 1/2"" (63.50mm)", "3"" (76.20mm)", "3 1/2"" (88.9mm)"}
+		Dim medida As String = CreateMacizo(Forma(Listsel), oDoc, oWhatToRun)
+
+		Listsel.Clear()
+		Dim Materials As AssetsEnumerator = oMaterialAsset.MaterialAssets
+		For Each A As Asset In Materials
+			Listsel.Add(A.DisplayName)
+		Next
+		Listsel.Sort()
+		iProperties.Material = Forma(Listsel)
+
+		addData = oWhatToRun & " " & checktype & " " & medida & " "
+		Dim propMAT_PLANO As [Property] = GetOrCreateProperty(customProps, "MATERIAL_PLANO")
+		propMAT_PLANO.Value = "=<MATERIAL_BASE> <MATERIAL>"
+
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	' REDONDO
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	ElseIf oWhatToRun = "REDONDO" Then
+		Listsel = New List(Of String) From {"TREFILADO", "LAMINADO", "PLASTICO"}
+		Dim checktype As String = Forma(Listsel)
+		If checktype = "PLASTICO" Then
+			oMaterialAsset = ThisApplication.AssetLibraries.Item("PLASTICOS DB")
+			Dim propPLASTIC As [Property] = GetOrCreateProperty(customProps, "PLASTIC")
+			propPLASTIC.Value = "✓"
+		Else
+			Try
+				Dim propPLASTIC As [Property] = GetOrCreateProperty(customProps, "PLASTIC")
+				propPLASTIC.Delete()
+			Catch
+			End Try
+			oMaterialAsset = ThisApplication.AssetLibraries.Item("METALES DB")
+		End If
+		ThisApplication.ActiveMaterialLibrary = oMaterialAsset
+		oDoc.SubType = "{4D29B490-49B2-11D0-93C3-7E0706000000}"
+
+		Listsel = New List(Of String) From {"3/16"" (4.76mm)", "1/4"" (6.35mm)", "5/16"" (7.94mm)", "8mm", "3/8"" (9.53mm)", "10mm", "12mm", "1/2"" (12.70mm)", "15mm", "16mm", "5/8"" (15.88mm)", "19mm", "3/4"" (19.10mm)", "20mm", "7/8"" (22.22mm)", "25mm", "30mm", "35mm", "1 1/4"" (31.75mm)", "1 1/2"" (38.1mm)", "40mm", "1 3/4"" (44.45mm)", "50mm", "2"" (50.80mm)", "55mm", "60mm", "2 1/2"" (63.50mm)", "70 mm", "3"" (76.20mm)", "3 1/2"" (88.9mm)", "90mm", "110mm", "120mm", "140mm", "150mm", "160mm"}
+		Dim medida As String = CreateMacizo(Forma(Listsel), oDoc, oWhatToRun)
+
+		Listsel.Clear()
+		Dim Materials As AssetsEnumerator = oMaterialAsset.MaterialAssets
+		For Each A As Asset In Materials
+			Listsel.Add(A.DisplayName)
+		Next
+		Listsel.Sort()
+		iProperties.Material = Forma(Listsel)
+
+		addData = oWhatToRun & " " & checktype & " " & medida & " "
+		Dim propMAT_PLANO As [Property] = GetOrCreateProperty(customProps, "MATERIAL_PLANO")
+		propMAT_PLANO.Value = "=<MATERIAL_BASE> <MATERIAL>"
+
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	' GENERICO
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	ElseIf oWhatToRun = "GENERICO" Then
+		oMaterialAsset = ThisApplication.AssetLibraries.Item("DEFAULT")
+		ThisApplication.ActiveMaterialLibrary = oMaterialAsset
+		oDoc.SubType = "{4D29B490-49B2-11D0-93C3-7E0706000000}"
+		iProperties.Material = "Genérico"
+
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	' GUIA
+	':::::::::::::::::::::::::::::::::::::::::::::::::::::::
+	ElseIf oWhatToRun = "GUIA" Then
+		oMaterialAsset = ThisApplication.AssetLibraries.Item("DEFAULT")
+		ThisApplication.ActiveMaterialLibrary = oMaterialAsset
+		oDoc.SubType = "{4D29B490-49B2-11D0-93C3-7E0706000000}"
+		iProperties.Material = "Genérico"
+		oDoc.ComponentDefinition.BOMStructure = BOMStructureEnum.kReferenceBOMStructure
+	End If
+
+	'Propiedad común
+	Dim propMAT_BASE As [Property] = GetOrCreateProperty(customProps, "MATERIAL_BASE")
+	propMAT_BASE.Value = addData
+End Sub
+
+
+'---------------------------------------------------------
+' Obtener/Crear propiedad
+'---------------------------------------------------------
+Function GetOrCreateProperty(props As Inventor.PropertySet, propName As String) As Inventor.Property
+	For Each prop As Inventor.Property In props
+		If prop.Name = propName Then Return prop
+	Next
+	Return props.Add(" ", propName)
+End Function
+
+
+'---------------------------------------------------------
+' Crear iFeature macizo
+'---------------------------------------------------------
+Function CreateMacizo(oListUnits As String, oDoc As Document, oWhatToRun As String) As String
+	Dim oDocPD As PartComponentDefinition = oDoc.ComponentDefinition
+	Dim oPlane As WorkPlane = ThisApplication.CommandManager.Pick(
+	                            kWorkPlaneFilter, "Seleccione plano de aplicación")
+	Dim oFeatures As PartFeatures = oDocPD.Features
+
+	Dim numeroStr As String
+	Dim opcionSeleccionada As String = oListUnits
+	Dim inicio As Integer = opcionSeleccionada.IndexOf("("c)
+	If inicio > 0 Then
+		Dim fin As Integer = opcionSeleccionada.IndexOf(")"c)
+		Dim longitud As Integer = fin - inicio - 1
+		numeroStr = opcionSeleccionada.Substring(inicio + 1, longitud)
+	Else
+		numeroStr = oListUnits
+	End If
+
+	Dim oiFeatureDef As iFeatureDefinition =
+	    oFeatures.iFeatures.CreateiFeatureDefinition(
+	    "D:\Bibliotecas\iFeatures\custom\MACIZO " & oWhatToRun & ".ide")
+
+	For Each oInput As iFeatureInput In oiFeatureDef.iFeatureInputs
+		Select Case oInput.Name
+			Case "Plano de base"
+				Dim oPlaneInput As iFeatureSketchPlaneInput = oInput
+				oPlaneInput.PlaneInput = oPlane
+			Case "Dimension"
+				Dim oParamInput As iFeatureParameterInput = oInput
+				oParamInput.Expression = numeroStr
+		End Select
+	Next
+
+	oFeatures.iFeatures.Add(oiFeatureDef)
+	Return numeroStr
+End Function
+
+
+'---------------------------------------------------------
+' Formulario selector
+'---------------------------------------------------------
+Function Forma(oList As List(Of String)) As String
+	Dim form As New Form()
+	form.Text = "Generador"
+	form.StartPosition = FormStartPosition.CenterScreen
+	form.Width = 150
+	form.Height = 265
+	form.FormBorderStyle = FormBorderStyle.FixedDialog
+	form.MaximizeBox = False
+	form.MinimizeBox = False
+	form.ShowInTaskbar = False
+
+	Dim listBox As New ListBox()
+	listBox.Items.AddRange(oList.ToArray())
+	listBox.SelectionMode = SelectionMode.One
+	listBox.Dock = DockStyle.Fill
+	AddHandler listBox.KeyDown, Sub(sender As Object, e As KeyEventArgs)
+	                                If e.KeyCode = Keys.Enter Then
+	                                    e.Handled = True
+	                                    e.SuppressKeyPress = True
+	                                    form.DialogResult = DialogResult.OK
+	                                End If
+	                            End Sub
+
+	form.Controls.Add(listBox)
+
+	Dim button As New Button()
+	button.Text = "Aceptar"
+	button.DialogResult = DialogResult.OK
+	button.Dock = DockStyle.Bottom
+	form.Controls.Add(button)
+
+	Return If(form.ShowDialog() = DialogResult.OK, listBox.SelectedItem.ToString(), "")
+End Function

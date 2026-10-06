@@ -1,0 +1,66 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<Export>
+
+  <!--Exported by Autodesk Inventor Version 27.4 Production Candidate-->
+
+  <!--The schema of this file is subject to change without notice and is not guaranteed to remain the same from one release to the next.-->
+
+  <Text Version="6">
+    <Style Angle="0" AspectRatio="1" Color="0 0 0 1" EditFlag="0" FontFace="Tahoma" FontSize="0.2" HorizontalJustification="0" InternalName="1:Texto de nota (ISO) DB&#xA;" IsBold="0" IsColorByLayer="1" IsItalic="0" IsItalicizeSymbols="1" IsUnderline="0" LineSpacingType="0" LineSpacingValue="1" VerticalJustification="0">
+      <Name Description="" Language="3082">Texto de nota (ISO) DB</Name>
+    </Style>
+  </Text>
+
+  <Text Version="6">
+    <Style Angle="0" AspectRatio="1" Color="0 0 0 1" EditFlag="0" FontFace="Tahoma" FontSize="0.2" HorizontalJustification="0" InternalName="1:Texto de nota (ISO) DB&#xA;" IsBold="0" IsColorByLayer="1" IsItalic="0" IsItalicizeSymbols="1" IsUnderline="0" LineSpacingType="0" LineSpacingValue="1" VerticalJustification="0">
+      <Name Description="" Language="3082">Texto de nota (ISO) DB</Name>
+    </Style>
+  </Text>
+
+  <Text Version="6">
+    <Style Angle="0" AspectRatio="1" Color="0 0 0 1" EditFlag="0" FontFace="Tahoma" FontSize="0.2" HorizontalJustification="0" InternalName="1:Texto de nota (ISO) DB&#xA;" IsBold="0" IsColorByLayer="1" IsItalic="0" IsItalicizeSymbols="1" IsUnderline="0" LineSpacingType="0" LineSpacingValue="1" VerticalJustification="0">
+      <Name Description="" Language="3082">Texto de nota (ISO) DB</Name>
+    </Style>
+  </Text>
+
+  <PartsList Version="2">
+    <Style Direction="1" DisplayParticipants="1" DisplayTitle="0" EditFlag="0" Grouping="0" GroupingDisplayGroupedItemNumber="1" Heading="2" HeadingGap="0.09" InsideLineColor="0:0:0:255" InsideLineWeight="1" InternalName="1:BULONERIA&#xA;" IsInsideLineColorByLayer="1" IsInsideLineWeightByLayer="1" IsOutsideLineColorByLayer="1" IsOutsideLineWeightByLayer="1" Key1PropertyID="55" Key1PropertyMemberID="" Key1PropertySet="{32853F0F-3444-11D1-9E93-0060B03C1CA6}" Key2PropertyID="55" Key2PropertyMemberID="" Key2PropertySet="{32853F0F-3444-11D1-9E93-0060B03C1CA6}" Key3PropertyID="55" Key3PropertyMemberID="" Key3PropertySet="{32853F0F-3444-11D1-9E93-0060B03C1CA6}" LinesOfText="0" OutsideLineColor="0:0:0:255" OutsideLineWeight="1" RecoverDefaultPrefix="1" RowGap="0.09" TitleGap="0.09">
+      <SubStyle Collection="Text" Language="3082" Type="TextStyle">Texto de nota (ISO) DB</SubStyle>
+      <SubStyle Collection="Text" Language="3082" Type="HeadingTextStyle">Texto de nota (ISO) DB</SubStyle>
+      <SubStyle Collection="Text" Language="3082" Type="TitleTextStyle">Texto de nota (ISO) DB</SubStyle>
+      <Title>
+        <Item Language="3082" String="LISTA DE PIEZAS"/>
+      </Title>
+      <Columns>
+        <ColumnItem ColumnWidth="0.7" ColumnWidthScale="1" DecimalType="0" DisplayUnit="1" FractionStackScale="0.7" FractionStackStyle="-1" FractionalFormat="0" Heading="CANT" HeadingFromDataSource="0" HeadingJustification="1" IsString="1" LeadingZeros="0" Precision="3" PropertyID="9" PropertyMemberID="" PropertySet="{BEB6B91C-AF44-4f9b-AD9E-1E0570A168F9}" Substitute="0" SubstituteDecimalType="0" SubstituteDisplayUnit="1" SubstituteFractionStackScale="0.7" SubstituteFractionStackStyle="-1" SubstituteFractionalFormat="0" SubstituteLeadingZeros="0" SubstituteMergeResult="0" SubstitutePrecision="3" SubstitutePropertyID="" SubstitutePropertyMemberID="" SubstitutePropertySet="" SubstituteTrailingZeros="0" SubstituteUnitFormat="0" SubstituteUnitType="5" TrailingZeros="0" UnitFormat="0" UnitType="5" ValueJustification="0">
+          <PropertyExternalName>
+            <Item Language="3082" String="CANT"/>
+          </PropertyExternalName>
+          <SubstitutePropertyExternalName>
+            <Item Language="3082" String=""/>
+          </SubstitutePropertyExternalName>
+        </ColumnItem>
+        <ColumnItem ColumnWidth="6" ColumnWidthScale="1" DecimalType="0" DisplayUnit="1" FractionStackScale="0.7" FractionStackStyle="-1" FractionalFormat="0" Heading="DESCRIPCION" HeadingFromDataSource="0" HeadingJustification="1" IsString="1" LeadingZeros="0" Precision="3" PropertyID="5" PropertyMemberID="" PropertySet="{32853F0F-3444-11D1-9E93-0060B03C1CA6}" Substitute="0" SubstituteDecimalType="0" SubstituteDisplayUnit="1" SubstituteFractionStackScale="0.7" SubstituteFractionStackStyle="-1" SubstituteFractionalFormat="0" SubstituteLeadingZeros="0" SubstituteMergeResult="0" SubstitutePrecision="3" SubstitutePropertyID="" SubstitutePropertyMemberID="" SubstitutePropertySet="" SubstituteTrailingZeros="0" SubstituteUnitFormat="0" SubstituteUnitType="5" TrailingZeros="0" UnitFormat="0" UnitType="5" ValueJustification="0">
+          <PropertyExternalName>
+            <Item Language="3082" String="DESCRIPCION"/>
+          </PropertyExternalName>
+          <SubstitutePropertyExternalName>
+            <Item Language="3082" String=""/>
+          </SubstitutePropertyExternalName>
+        </ColumnItem>
+      </Columns>
+      <FilterList/>
+      <Key1PropertyExternalName>
+        <Item Language="3082" String="Nº ALMACENAMIENTO"/>
+      </Key1PropertyExternalName>
+      <Key2PropertyExternalName>
+        <Item Language="3082" String="Nº ALMACENAMIENTO"/>
+      </Key2PropertyExternalName>
+      <Key3PropertyExternalName>
+        <Item Language="3082" String="Nº ALMACENAMIENTO"/>
+      </Key3PropertyExternalName>
+      <Name Description="Basado en ISO 7573 - 1983" Language="3082">BULONERIA</Name>
+    </Style>
+  </PartsList>
+
+</Export>

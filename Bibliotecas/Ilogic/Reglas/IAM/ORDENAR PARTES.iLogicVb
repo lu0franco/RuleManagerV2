@@ -1,0 +1,99 @@
+﻿Option Explicit On
+Imports Inventor
+'===  ClasificarConGeometrias.vb  ============================================
+' Clasifica primer nivel + crea carpeta GEOMETRIAS con planos/ ejes del IAM
+'  - Ningún nodo se mete en dos carpetas
+'=============================================================================
+Public Sub Main()
+    Dim invApp As Inventor.Application = ThisApplication
+    Dim asmDoc As AssemblyDocument = invApp.ActiveDocument
+    Dim pane As BrowserPane = asmDoc.BrowserPanes.ActivePane
+
+    '--- colecciones ---
+    Dim colConj As ObjectCollection = invApp.TransientObjects.CreateObjectCollection
+    Dim colChap As ObjectCollection = invApp.TransientObjects.CreateObjectCollection
+    Dim colMec  As ObjectCollection = invApp.TransientObjects.CreateObjectCollection
+    Dim colCom  As ObjectCollection = invApp.TransientObjects.CreateObjectCollection
+    Dim colGeom As ObjectCollection = invApp.TransientObjects.CreateObjectCollection
+
+    '================ 1) COMPONENTES (primer nivel) ===========================
+    For Each occ As ComponentOccurrence In asmDoc.ComponentDefinition.Occurrences
+        If occ.Suppressed Then Continue For
+
+        Dim node As BrowserNode = pane.GetBrowserNodeFromObject(occ)
+        If EstaEnCarpeta(node) Then Continue For        'ya clasificado
+
+        Dim docType As DocumentTypeEnum = occ.DefinitionDocumentType
+
+        If docType = kAssemblyDocumentObject Then
+            If LeerProp(occ, "ARM") = "✓" Then colConj.Add(node)
+        ElseIf occ.Definition.IsContentMember Then
+            colCom.Add(node)
+        Else
+            Dim mc  As String = LeerProp(occ, "MC")
+            Dim mec As String = LeerProp(occ, "MEC")
+            Dim com As String = LeerProp(occ, "COM")
+            If mc  = "✓" Then colChap.Add(node)
+            If mec = "✓" Then colMec.Add(node)
+            If com = "✓" Then colCom.Add(node)
+        End If
+    Next
+
+    '================ 2) GEOMETRIAS (planos y ejes del IAM) ==================
+    Dim asmDef As AssemblyComponentDefinition = asmDoc.ComponentDefinition
+
+For Each wp As WorkPlane In asmDef.WorkPlanes
+    Dim node As BrowserNode = Nothing
+    Try
+        node = pane.GetBrowserNodeFromObject(wp)
+        If NodoValidoParaCarpeta(node, pane) Then colGeom.Add(node)
+    Catch
+    End Try
+Next
+
+For Each ax As WorkAxis In asmDef.WorkAxes
+    Dim node As BrowserNode = Nothing
+    Try
+        node = pane.GetBrowserNodeFromObject(ax)
+        If NodoValidoParaCarpeta(node, pane) Then colGeom.Add(node)
+    Catch
+    End Try
+Next
+    '================ 3) CREAR CARPETAS ======================================
+    If colConj.Count > 0 Then pane.AddBrowserFolder("CONJUNTOS", colConj)
+    If colChap.Count > 0 Then pane.AddBrowserFolder("CHAPAS", colChap)
+    If colMec.Count  > 0 Then pane.AddBrowserFolder("MECANIZADOS", colMec)
+    If colCom.Count  > 0 Then pane.AddBrowserFolder("COMERCIALES", colCom)
+    If colGeom.Count > 0 Then pane.AddBrowserFolder("GEOMETRIAS", colGeom)
+
+    MsgBox("Clasificación finalizada", vbInformation, "Listo")
+End Sub
+
+'--- Lee propiedad personalizada (devuelve "" si no existe) -----------------
+Private Function LeerProp(occ As ComponentOccurrence, nombre As String) As String
+    Try
+        Return occ.Definition.Document.PropertySets.Item("Inventor User Defined Properties").Item(nombre).Value.ToString()
+    Catch
+        Return ""
+    End Try
+End Function
+
+'--- Indica si un nodo ya está dentro de una carpeta ------------------------
+Private Function EstaEnCarpeta(node As BrowserNode) As Boolean
+    Try
+        Return node.Parent IsNot Nothing AndAlso TypeOf node.Parent Is BrowserFolder
+    Catch
+        Return False
+    End Try
+End Function
+
+'--- Nodo válido para carpeta: top-level y sin padre carpeta -----------------
+Private Function NodoValidoParaCarpeta(node As BrowserNode, pane As BrowserPane) As Boolean
+    If node Is Nothing Then Return False
+    Try
+        ' debe ser hijo directo del TopNode y no estar en carpeta
+        Return node.Parent Is pane.TopNode And Not EstaEnCarpeta(node)
+    Catch
+        Return False
+    End Try
+End Function

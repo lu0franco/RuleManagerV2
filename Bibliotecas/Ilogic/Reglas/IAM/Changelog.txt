@@ -1,0 +1,4 @@
+26/3/2024
+PropAsign2 - Se ha agregado una comprobación para saltar las ocurrencias y subocurrencias que feuran partes pertenecientes al centro de contenido, ya que estas partes no tienen propiedades editables
+Contador de elementos - Se ha agregado la regla contador de elementos para obtener automáticamente la cantidad de piezas en el ensamblaje para representarlas en el r+outlo del plano de pieza, la regla ya tiene la correción aplicada a PropAsign2
+Generar LDM-PERFILERIAV2 - No existiá comprobación de duplicidad de filas, por lo tanto, si habia dos piezas iguales se repetían en la lista, se corrigió adaptando la comprobación de la regla Generar LDM-MULTICORTEV2

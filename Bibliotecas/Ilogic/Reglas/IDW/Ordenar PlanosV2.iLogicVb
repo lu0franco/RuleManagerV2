@@ -1,0 +1,138 @@
+﻿
+
+' Recorrer todas las vistas en la hoja activa
+Sub Main()
+	iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IDW\borrar copias.iLogicVb")
+Dim drawingDoc As DrawingDocument = ThisDoc.Document
+Dim sheet As Sheet = Nothing
+Dim sheetsList As New List(Of sheet)
+Dim browserPane As BrowserPane = drawingDoc.BrowserPanes.Item("DlHierarchy")
+' Variables para rastrear los valores de N° de pieza y N° de almacenamiento
+Dim numeroDePieza As String = ""
+Dim numeroDeAlmacenamiento As String = ""
+Dim lastSheetNode As BrowserNode
+For Each sheet In drawingDoc.Sheets
+	sheet.Activate
+	' Lista para almacenar las propiedades con valor "✓"
+	Dim propiedadesConValorCheck As String = ""
+			If  sheet.Name.Contains("Copia") Then
+			
+			sheet.Delete
+		Else
+	sheetsList.Add(sheet)
+End If
+	Dim view As DrawingView
+	If sheet.DrawingViews.Count = 0 Then
+		Continue For
+	Else
+		view = sheet.DrawingViews(1)
+	End If
+	Dim estado As String = view.ActiveModelState
+	' Obtener la ruta del archivo referenciado desde la vista
+	Dim referencedFilePath As String
+	referencedFilePath = view.ReferencedFile.FullFileName
+
+	' Verificar si el archivo referenciado es un documento de pieza o ensamblaje
+	If referencedFilePath.EndsWith(".ipt", StringComparison.OrdinalIgnoreCase) Or referencedFilePath.EndsWith(".iam", StringComparison.OrdinalIgnoreCase) Or referencedFilePath.EndsWith(".ipn", StringComparison.OrdinalIgnoreCase) Then
+		' Es un documento de pieza o ensamblaje, realizar operaciones según sea necesario
+		Dim doc As Document
+		doc = ThisApplication.Documents.Open(referencedFilePath, False)
+		Try
+			'get titleblock of sheet
+			Dim oTB1 = sheet.TitleBlock
+			Dim Textocaja As TextBox
+
+			Textocaja = oTB1.Definition.Sketch.TextBoxes(19)
+			numeroDePieza = oTB1.GetResultText(Textocaja)
+			'MsgBox(numeroDePieza)
+			Textocaja = oTB1.Definition.Sketch.TextBoxes(20)
+			numeroDeAlmacenamiento = oTB1.GetResultText(Textocaja)
+			'MsgBox(numeroDeAlmacenamiento)
+
+			numeroDeAlmacenamiento = numeroDeAlmacenamiento.Replace("/", "_")
+		Catch
+		end try
+		' Acceder a las propiedades personalizadas del documento de pieza o ensamblaje
+		Dim customProperties As PropertySet
+		customProperties = doc.PropertySets.Item("Inventor User Defined Properties")
+
+		' Verificar todas las propiedades personalizadas para el valor "✓"
+		For Each prop As [Property] In customProperties
+			Try
+				If prop.Value = "✓" Then
+					propiedadesConValorCheck = propiedadesConValorCheck & " - " & prop.Name
+				End If
+			Catch
+			End Try
+		Next
+
+		' Cerrar el documento de pieza o ensamblaje después de usarlo
+		doc.Close()
+	End If
+	Dim nombreHoja As String
+
+	If sheet.Border Is Nothing Then
+		nombreHoja = "CORTE"
+	Else
+		'If Not sheet.Name.Contains("Copia") Then
+'		If not sheet.Name.Contains("Copia") Then
+			
+			' Construir el nombre de la hoja
+			nombreHoja = numeroDeAlmacenamiento & "  -  " & numeroDePieza & propiedadesConValorCheck
+			' Cambiar el nombre de la hoja
+			sheet.Name = nombreHoja
+'		Else
+'			sheet.Delete
+'		End If
+	End If
+	' Mostrar los valores de N° de pieza, N° de almacenamiento y propiedades con valor "✓" para cada hoja
+	If Not String.IsNullOrEmpty(numeroDePieza) And Not String.IsNullOrEmpty(numeroDeAlmacenamiento) Then
+		'        Dim mensaje As String
+		'        mensaje = "Hoja: " & sheet.Name & vbCrLf
+		'        mensaje &= "N° de pieza: " & numeroDePieza & vbCrLf
+		'        mensaje &= "N° de almacenamiento: " & numeroDeAlmacenamiento & vbCrLf
+		'        mensaje &= "Propiedades con valor ✓: " & vbCrLf & String.Join(", ", propiedadesConValorCheck)
+		'        MsgBox(mensaje)
+	Else
+		MsgBox("No se encontraron valores de N° de pieza y N° de almacenamiento para la hoja: " & sheet.Name)
+	End If
+
+Next
+
+sheetsList.Sort(AddressOf Comparer)
+Dim foundSheet As sheet
+For i As Integer = 0 To sheetsList.Count - 1
+	If sheetsList(i).Name.Contains("CORTE") Then
+		foundSheet = sheetsList(i)
+		sheetIndex = i
+		Exit For
+	End If
+Next
+If sheetIndex <> -1 Then
+	foundSheet.ExcludeFromCount = True
+	sheetsList.RemoveAt(sheetIndex) ' Eliminar la hoja de su posición actual
+	sheetsList.Add(foundSheet) ' Añadir la hoja al final de la lista
+	' MsgBox("HOJA '" & sheetName & "' se mandó al fondo")
+Else
+	   'MsgBox("HOJA '" & sheetName & "' no está")
+End If
+Dim ActivesheetNode As BrowserNode
+Dim sheetNode As BrowserNode
+Dim bottomNode As BrowserNode
+
+For Each sheet In sheetsList
+	sheetNode = browserPane.GetBrowserNodeFromObject(sheet)
+	bottomNode = browserPane.TopNode.BrowserNodes.Item(browserPane.TopNode.BrowserNodes.Count)
+	browserPane.Reorder(bottomNode, False, sheetNode)
+Next
+'MsgBox(browserPane.TopNode.BrowserNodes.Count)
+'iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IDW\Añadir copias.iLogicVb")
+
+End Sub
+Private Function Comparer(x As Sheet, y As Sheet) As Integer
+	Dim xfix As String = x.Name.Replace(".", "").Replace("_", "")
+	Dim yfix As String = y.Name.Replace(".", "").Replace("_", "")
+	Return String.Compare(xfix, yfix)
+End Function
+
+

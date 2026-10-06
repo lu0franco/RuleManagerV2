@@ -1,0 +1,55 @@
+﻿Sub Main()
+' Definir la lista
+' Configurar el evento ParameterChange para detectar cambios en la lista
+ThisApplication.CommandManager.ControlDefinitions("AppShowHomeBaseCmd").Execute
+AddHandler ThisApplication.ApplicationEvents.OnActiveProjectChanged, AddressOf OnActiveProjectChanged
+AddHandler ThisApplication.ApplicationEvents.OnNewDocument, AddressOf OnNewDocument
+End Sub
+
+' Evento ParameterChange para detectar cambios en la lista
+Private Sub OnActiveProjectChanged(ByVal ProjectObject As DesignProject, ByVal BeforeOrAfter As Inventor.EventTimingEnum, ByVal Context As Inventor.NameValueMap, ByRef HandlingCode As Inventor.HandlingCodeEnum)
+	MsgBox("cargar")
+	' Obtén el documento activo
+
+	Call functionGen
+
+
+	' MessageBox.Show("Error al agregar la Asset Library: " & ex.Message)
+
+
+End Sub
+' Evento ParameterChange para detectar cambios en la lista
+Private Sub OnNewDocument(ByVal DocumentObject As Inventor.Document, ByVal BeforeOrAfter As Inventor.EventTimingEnum, ByVal Context As Inventor.NameValueMap, ByRef HandlingCode As Inventor.HandlingCodeEnum)
+	MsgBox("cargar")
+	' Obtén el documento activo
+	Call functionGen
+
+	' MessageBox.Show("Error al agregar la Asset Library: " & ex.Message)
+
+
+End Sub
+
+Function functionGen
+' Define las rutas de las carpetas a crear
+Dim projectPath As String = ThisApplication.DesignProjectManager.ActiveDesignProject.WorkspacePath
+
+Dim foldersToCreate As List(Of String) = New List(Of String) From {
+    "01 - DIBUJOS",
+    "02 - PLANOS",
+    "03 - CORTES",
+	"04 - COMERCIALES",
+	"05 - PIEZAS COMUNES",
+	"06 - MULTIMEDIA",
+	"07 - AUTOCAD - SAT",
+	"08 - MAQUINAS DE REFERENCIAS"
+}
+
+' Verifica y crea las carpetas si no existen
+For Each folderName As String In foldersToCreate
+    Dim fullPath As String = System.IO.Path.Combine(projectPath, folderName)
+    
+    If Not System.IO.Directory.Exists(fullPath) Then
+        System.IO.Directory.CreateDirectory(fullPath)
+    End If
+Next
+End Function

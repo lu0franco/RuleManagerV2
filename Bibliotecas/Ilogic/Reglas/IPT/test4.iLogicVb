@@ -1,0 +1,160 @@
+﻿Public Sub Main()
+	
+	Dim iDoc As Inventor.Document= ThisApplication.ActiveEditDocument
+	Dim oWorkPlane As WorkPlane
+	Dim comp As ComponentOccurrence = Nothing
+	
+	If iDoc.DocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
+		comp = ThisApplication.CommandManager.Pick(SelectionFilterEnum.kAssemblyLeafOccurrenceFilter, "Select a component") 
+		If Not comp Is Nothing Then
+			'set work plane visibility
+			For Each oWorkPlane In comp.Definition.WorkPlanes 'oDoc.ComponentDefinition.WorkPlanes
+				oWorkPlane.Visible = True 
+			Next
+		Else
+			Exit Sub
+		End If 
+	ElseIf iDoc.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
+		'Set work plane visibility
+    	For Each oWorkPlane In iDoc.ComponentDefinition.WorkPlanes
+    		oWorkPlane.Visible = True 'wfBoolean
+    	Next
+	End If
+	
+	iDoc.update
+	
+	' Declare a variable and create a new instance of the select class.
+    Dim oSelect As New WorkplaneSelect
+iLogicVb.Automation.ExitDelayedRuleRunningMode
+	Do
+    	oWorkPlane = oSelect.Pick(ThisApplication, SelectionFilterEnum.kWorkPlaneFilter, iDoc, comp)
+	    ' Check to make sure a face was selected.
+	    If Not oWorkPlane Is Nothing Then
+	        oWorkPlane.Visible = False
+	    End If
+		iLogicVb.Automation.ExitDelayedRuleRunningMode
+oWhatToRun = SharedVariable("oWhatToRun")
+Dim oDocPD As PartComponentDefinition = iDoc.ComponentDefinition
+
+
+Dim oFeatures As PartFeatures = oDocPD.Features
+
+ 'Create an iFeatureDefinition Object.
+Dim oiFeatureDef As iFeatureDefinition
+oiFeatureDef = oFeatures.iFeatures.CreateiFeatureDefinition("C:\Users\Public\Documents\Autodesk\Inventor 2023\Catalog\custom\MACIZO " & oWhatToRun &  ".ide")
+       ' Set the input.
+    Dim oInput As iFeatureInput
+    For Each oInput In oiFeatureDef.iFeatureInputs
+        Dim oParamInput As iFeatureParameterInput
+        Select Case oInput.Name
+			Case "Plano de base"
+                Dim oPlaneInput As iFeatureSketchPlaneInput
+                 oPlaneInput = oInput
+					oPlaneInput.PlaneInput = oWorkPlane
+				 
+           Case "Dimension"
+                oParamInput = oInput
+                oParamInput.Expression = "20"
+        End Select
+    Next
+	 'Create the iFeature.
+	 				 
+				Dim oiFeature As iFeature = oFeatures.iFeatures.Add(oiFeatureDef)
+	Loop While oWorkPlane IsNot Nothing
+	
+	
+
+End Sub
+
+
+Class WorkplaneSelect
+	
+Private WithEvents oInteraction As InteractionEvents
+Private WithEvents oSelect As SelectEvents
+Private WithEvents oMouse As MouseEvents
+' Declare a flag that's used to determine when selection stops.
+Private bStillSelecting As Boolean
+Private myInventor As Inventor.Application
+Private iDoc As Document
+Private comp As ComponentOccurrence
+
+Public Function Pick(oInventor As Inventor.Application, filter As SelectionFilterEnum, oDoc As Document , oComp As ComponentOccurrence) As Object
+	' Initialize flag.
+    bStillSelecting = True
+    
+	myInventor = oInventor
+	
+	comp = oComp
+	iDoc=oDoc
+	
+    ' Create an InteractionEvents object.
+    oInteraction = myInventor.CommandManager.CreateInteractionEvents
+    
+    ' Define that we want select events rather than mouse events.
+    oInteraction.SelectionActive = True
+
+    ' Set a reference to the select events.
+    oSelect = oInteraction.SelectEvents
+    
+	' Set a reference to the mouse events.
+	oMouse = oInteraction.MouseEvents
+	
+    ' Set the filter using the value passed in.
+    oSelect.AddSelectionFilter (filter)
+    ' The InteractionEvents object.
+    oInteraction.Start
+    ' Loop until a selection is made.
+    Do While bStillSelecting
+        myInventor.UserInterfaceManager.DoEvents
+    Loop
+    
+    ' Get the selected item.  If more than one thing was selected,
+    ' just get the first item and ignore the rest.
+    Dim oSelectedEnts As ObjectsEnumerator
+    oSelectedEnts = oSelect.SelectedEntities
+    If oSelectedEnts.Count > 0 Then
+        Pick = oSelectedEnts.Item(1)
+    Else
+        Pick = Nothing
+    End If
+    
+    ' Stop the InteractionEvents object.
+    oInteraction.Stop
+    
+    ' Clean up.
+    oSelect = Nothing
+	oMouse = Nothing
+    oInteraction = Nothing
+End Function
+
+
+Private Sub oInteraction_OnTerminate() Handles oInteraction.OnTerminate
+	' Set the flag to indicate we're done.
+    bStillSelecting = False
+End Sub
+
+Private Sub oMouse_OnMousedoubleClick(Button As MouseButtonEnum, ShiftKeys As ShiftStateEnum, ModelPosition As Point, ViewPosition As Point2d, View As View) Handles oMouse.OnMouseDoubleClick
+	If Button = MouseButtonEnum.kLeftMouseButton  And ShiftKeys = ShiftStateEnum.kShiftStateNone Then
+		If comp IsNot Nothing Then
+			'set work plane visibility
+			For Each oWorkPlane In comp.Definition.WorkPlanes 'oDoc.ComponentDefinition.WorkPlanes
+				oWorkPlane.Visible = True 
+			Next
+		ElseIf iDoc IsNot Nothing Then
+			'Set work plane visibility
+	    	For Each oWorkPlane In iDoc.ComponentDefinition.WorkPlanes
+	    		oWorkPlane.Visible = True 'wfBoolean
+	    	Next
+		End If
+		iDoc.Update 
+	End If
+End Sub
+
+Private Sub oSelect_OnSelect(JustSelectedEntities As ObjectsEnumerator, SelectionDevice As SelectionDeviceEnum, ModelPosition As Point, ViewPosition As Point2d, View As View) Handles oSelect.onselect
+	' Set the flag to indicate we're done.
+	If JustSelectedEntities.Count>0 Then
+    	bStillSelecting = False
+	End If
+End Sub
+
+End Class

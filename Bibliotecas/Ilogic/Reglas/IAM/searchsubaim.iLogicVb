@@ -1,0 +1,38 @@
+﻿Sub Main()
+    ' Obtener el ensamblaje activo
+    Dim assemblyDoc As AssemblyDocument
+    assemblyDoc = ThisApplication.ActiveDocument
+
+    ' Obtener todas las piezas y subensamblajes del árbol de diseño
+    Dim compDef As ComponentDefinition
+    compDef = assemblyDoc.ComponentDefinition
+
+    ' Crear una lista para almacenar los nombres de los subensamblajes
+    Dim subAssemblyNames As New List(Of String)
+
+    ' Analizar el ensamblaje principal en busca de subensamblajes
+    AnalyzeSubAssemblies(compDef, subAssemblyNames)
+
+    ' Mostrar la cantidad de subensamblajes encontrados y sus nombres
+    MsgBox("Cantidad de subensamblajes encontrados: " & subAssemblyNames.Count & vbCrLf &
+           "Nombres de los subensamblajes:" & vbCrLf &
+           String.Join(vbCrLf, subAssemblyNames.ToArray()), vbInformation, "Subensamblajes Encontrados")
+End Sub
+
+Sub AnalyzeSubAssemblies(compDef As ComponentDefinition, ByRef subAssemblyNames As List(Of String))
+    ' Iterar sobre las ocurrencias del ensamblaje actual
+    For Each oOcc As ComponentOccurrence In compDef.Occurrences
+        ' Verificar si la ocurrencia es un subensamblaje
+        If oOcc.DefinitionDocumentType = kAssemblyDocumentObject Then
+            ' Guardar el nombre del subensamblaje
+            subAssemblyNames.Add(oOcc.Name)
+
+            ' Obtener el conjunto de definición del subensamblaje
+            Dim subAssemblyCompDef As AssemblyComponentDefinition
+            subAssemblyCompDef = oOcc.Definition
+
+            ' Analizar el subensamblaje en busca de más subensamblajes
+            AnalyzeSubAssemblies(subAssemblyCompDef, subAssemblyNames)
+        End If
+    Next
+End Sub

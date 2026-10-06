@@ -1,0 +1,167 @@
+﻿Imports System.IO
+
+Sub Main()
+Dim flagPRINT As Boolean = False
+' Obtener el documento de dibujo activo
+Dim oDoc As DrawingDocument = ThisApplication.ActiveDocument
+Dim projectPath As String = System.IO.Path.GetDirectoryName(ThisDoc.WorkspacePath) ' Obtener la ruta del archivo de dibujo activo
+Dim standardProperties As PropertySet = oDoc.PropertySets.Item("Design Tracking Properties")
+standardProperties.Item("Project").Value = SharedVariable("OT")
+standardProperties.Item("Vendor").Value = SharedVariable("Cliente")
+standardProperties.Item("Part Number").Value = SharedVariable("Equipo")
+standardProperties.Item("Stock Number").Value = SharedVariable("Modelo")
+Dim OT As String = standardProperties.Item("Project").Value
+Dim Cliente As String = standardProperties.Item("Vendor").Value
+Dim Equipo As String = standardProperties.Item("Part Number").Value
+Dim Modelo As String = standardProperties.Item("Stock Number").Value
+Dim partsDataout As List(Of Dictionary(Of String, String)) = SharedVariable("DATOSOUT")
+If standardProperties.Item("Project").Value = "" Then
+	MsgBox("No se ha asignado OT en Propiedades, inserte la OT antes de continuar", vbExclamation)
+	standardProperties.Item("Project").Value = InputBox("Ingresá una OT para completar:", "Ingreso de OT")
+	MessageBox.Show("La OT es: " & standardProperties.Item("Project").Value)
+
+	'Exit Sub
+End If
+'If standardProperties.Item("Vendor").Value = "" Then
+'	MsgBox("No se ha asignado Cliente en Propiedades, inserte el Cliente antes de continuar", vbExclamation)
+'	Exit Sub
+'End If
+
+' Crear listas para separar los elementos
+Dim COMList As New List(Of Dictionary(Of String, String))()
+Dim MCList As New List(Of Dictionary(Of String, String))()
+Dim MEClist As New List(Of Dictionary(Of String, String))()
+
+' Separar los elementos según el valor de las claves
+For Each item As Dictionary(Of String, String) In partsDataout
+	If item.ContainsKey("COM") AndAlso Item("COM") = "✓" Then
+		COMList.Add(item)
+	End If
+	If item.ContainsKey("MC") AndAlso Item("MC") = "✓" Then
+		MCList.Add(item)
+	End If
+	If item.ContainsKey("MEC") AndAlso Item("MEC") = "✓" Then
+		If Not Item("COM") = "✓" Then
+			MEClist.Add(item)
+		End If
+	End If
+	If item.ContainsKey("PERFILERIA") AndAlso Item("PERFILERIA") = "✓" Then
+		MEClist.Add(item)
+	End If
+Next
+' Ordenar MCList por la clave "PRODUCTO"
+MCList.Sort(Function(x, y) String.Compare(x("PRODUCTO"), y("PRODUCTO")))
+
+
+' Crear una nueva instancia de Excel y abrir el archivo existente
+Dim excelApp As Object = CreateObject("Excel.Application")
+Dim filePath As String = "D:\Bibliotecas\Ilogic\Plantillas para reglas\REQUERIMIENTO DE MATERIALESV5.xlsx" ' Ruta del archivo de plantilla
+Dim excelWorkbook As Object = excelApp.Workbooks.Open(filePath)
+
+' Escribir cada lista en una hoja separada
+WriteDictListToSheet("R.MATERIALES PERFILERIA", MEClist, excelWorkbook, OT, Modelo, Equipo, Cliente)
+WriteDictListToSheet("R.MATERIALES COMERCIALES", COMList, excelWorkbook, OT, Modelo, Equipo, Cliente)
+WriteDictListToSheet("R.MATERIALES MULTICORTE", MCList, excelWorkbook, OT, Modelo, Equipo, Cliente)
+'WriteDictListToSheet("R.BULONERIA", BULList, excelWorkbook, OT, Modelo, Equipo, Cliente)
+' Crear la nueva carpeta dentro de la carpeta del proyecto
+Dim newFolderPath As String = System.IO.Path.Combine(projectPath, ThisDoc.Path, OT & " LDM")
+If Not Directory.Exists(newFolderPath) Then
+	Directory.CreateDirectory(newFolderPath)
+End If
+
+' Guardar el libro de destino dentro de la nueva carpeta
+Dim rutaLDM As String = System.IO.Path.Combine(newFolderPath, OT & " LDM.xlsx")
+
+' Guardar y cerrar el archivo de Excel
+excelWorkbook.SaveAs(rutaLDM)
+excelWorkbook.Close()
+excelApp.Quit()
+
+' Liberar los objetos de Excel
+System.Runtime.InteropServices.Marshal.ReleaseComObject(excelWorkbook)
+System.Runtime.InteropServices.Marshal.ReleaseComObject(excelApp)
+excelWorkbook = Nothing
+excelApp = Nothing
+Dim runBULONERIA As Boolean = SharedVariable("runBULONERIA")
+If runBULONERIA = False Then
+	' Preguntar al usuario si desea abrir la lista de materiales
+	Dim m As DialogResult
+	m = MessageBox.Show("¿Desea abrir la Lista de materiales?", "Acciones", MessageBoxButtons.OKCancel, MessageBoxIcon.Asterisk, MessageBoxDefaultButton.Button1)
+	Select Case m
+		Case DialogResult.OK
+			Dim xlver As Object
+			xlver = CreateObject("Excel.Application")
+			xlver.Visible = True
+			xlver.Workbooks.Open(rutaLDM)
+		Case DialogResult.Cancel
+	End Select
+End If
+flagPRINT = True
+SharedVariable("flagPRINT") = flagPRINT
+End Sub
+Sub WriteDictListToSheet(sheetName As String, dictList As List(Of Dictionary(Of String, String)), excelWorkbook As Object, OT As String, Modelo As String, Equipo As String, Cliente As String)
+	Dim headers As New List(Of String)
+	Select Case sheetName
+		Case "R.MATERIALES COMERCIALES"
+			headers.AddRange({"PLANO:", "POS", "CANT", "PRODUCTO", "LARGO" })
+		Case "R.MATERIALES MULTICORTE"
+			headers.AddRange({"PLANO:", "POS", "CANT", "PRODUCTO", "LARGO", "ANCHO", "DESCRIPCION" })
+		Case "R.MATERIALES PERFILERIA"
+			headers.AddRange({"PLANO:", "POS", "CANT", "PRODUCTO", "LARGO", "DESCRIPCION" })
+	End Select
+
+	Dim excelSheet As Object = Nothing
+	Try
+		excelSheet = excelWorkbook.Sheets(sheetName)
+	Catch ex As Exception
+		MsgBox("La hoja " & sheetName & " no existe en el archivo de plantilla.")
+		Exit Sub
+	End Try
+
+	' Escribir los datos del diccionario en las filas subsiguientes a partir de la fila 9
+	Dim rowIndex As Integer = 9
+	For Each partInfo In dictList
+		Dim columnIndex As Integer = 1
+		For Each header As String In headers
+			If partInfo.ContainsKey(header) Then
+				excelSheet.Cells(rowIndex, columnIndex).Value = partInfo(header)
+			Else
+				excelSheet.Cells(rowIndex, columnIndex).Value = ""
+			End If
+			columnIndex += 1
+		Next
+		rowIndex += 1
+	Next
+
+	' Aplicar formato desde la celda A9
+	Dim formatRange As Object
+	formatRange = excelSheet.Range("A9:J9")
+	formatRange.Copy()
+
+	' Determinar la última fila en función de la longitud de la lista dictList
+	Dim lastRow As Integer = 8 + dictList.Count
+	excelSheet.Range("A9:J" & lastRow).PasteSpecial(-4122)
+
+	'    ' Ajustar automáticamente el ancho de las columnas
+	excelSheet.Columns("A:H").AutoFit()
+	'    excelSheet.Columns("C").AutoFit()
+	'    excelSheet.Columns("E").AutoFit()
+	'    excelSheet.Columns("G").AutoFit()
+	excelSheet.Rows("9:" & lastRow).RowHeight = 102
+
+	Dim searchValues(0 To 3) As String
+	Dim replaceValues(0 To 3) As String
+	searchValues = {"OT", "MODELO", "EQUIPO", "CLIENTE" }
+	replaceValues = {OT, "MODELO: " & Modelo, "EQUIPO: " & Equipo, "CLIENTE: " & Cliente }
+
+	' Buscar y reemplazar los valores en las celdas específicas
+	Dim cell As Object
+	For Each cell In excelSheet.UsedRange
+		For i = 0 To UBound(searchValues)
+			Dim Valorreemplazo As String = cell.Value
+			If Valorreemplazo = CStr(searchValues(i)) Then
+				cell.Value = replaceValues(i)
+			End If
+		Next i
+	Next cell
+End Sub

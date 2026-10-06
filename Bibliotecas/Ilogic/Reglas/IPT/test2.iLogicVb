@@ -1,0 +1,25 @@
+﻿iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IPT\Plano.iLogicVb")
+
+If ThisApplication.ActiveDocumentType = kAssemblyDocumentObject Then
+  Dim oAssemDoc As AssemblyDocument = ThisApplication.ActiveDocument
+  If Not oAssemDoc.ComponentDefinition.ActiveOccurrence Is Nothing Then
+
+    MsgBox("In-Place edit session in effect!")
+	Dim parte As String = oAssemDoc.ComponentDefinition.ActiveOccurrence.Name
+	oAssemDoc.ComponentDefinition.ActiveOccurrence.ExitEdit(kExitToPrevious)
+
+	Dim oCompOcc As ComponentOccurrence = oAssemDoc.ComponentDefinition.Occurrences.ItemByName(parte)
+' Después de que la regla falle
+
+' Volver a ejecutar la regla
+
+		oAssemDoc.Update
+	oCompOcc.Edit
+
+    ' Do something useful       
+
+  End If
+	
+End If
+iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IPT\Seleccion base.iLogicVb")
+

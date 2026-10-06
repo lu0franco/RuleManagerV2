@@ -1,0 +1,44 @@
+﻿' <FireOthersImmediately>False</FireOthersImmediately>
+Sub Main()
+' Definir la lista
+' Configurar el evento ParameterChange para detectar cambios en la lista
+AddHandler ThisApplication.ApplicationEvents.OnActivateDocument, AddressOf DocumentActivated
+End Sub
+
+' Evento ParameterChange para detectar cambios en la lista
+Private Sub DocumentActivated(ByVal DocumentObject As Inventor._Document, ByVal BeforeOrAfter As Inventor.EventTimingEnum, ByVal Context As Inventor.NameValueMap, ByRef HandlingCode As Inventor.HandlingCodeEnum)
+	If BeforeOrAfter = kBefore Then
+		Dim oDoc As Document = ThisApplication.ActiveEditDocument
+		Dim customProps As PropertySet = oDoc.PropertySets.Item("Inventor User Defined Properties")
+		Dim propPESO_BRUTO As [Property]
+		propPESO_BRUTO = GetOrCreateProperty(customProps, "PESO_BRUTO")
+	'	MsgBox("funca?")
+
+		'	Try 
+		Dim extents_length As Double = SheetMetal.FlatExtentsLength
+
+		Dim extents_width As Double = SheetMetal.FlatExtentsWidth
+
+		'Catch
+		'	End Try
+
+		'propPESO_BRUTO.Value = (extents_length * extents_width * Grosor * (iProperties.Mass / iProperties.Volume))
+		'MsgBox(extents_length)
+		propPESO_BRUTO.Value = (extents_length * extents_width * Grosor * 3)
+
+
+
+	End If
+End Sub
+Function GetOrCreateProperty(props As Inventor.PropertySet, propName As String) As Inventor.Property
+	Dim prop As Inventor.Property
+	' Verificar si la propiedad ya existe
+	For Each prop In props
+		If prop.Name = propName Then
+			Return prop ' Devolver la propiedad existente
+		End If
+	Next
+
+	'Crear la propiedad si no existe
+	Return props.Add(" ", propName)
+End Function

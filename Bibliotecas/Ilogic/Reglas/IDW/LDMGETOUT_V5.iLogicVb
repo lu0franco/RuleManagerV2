@@ -1,0 +1,106 @@
+﻿
+Sub Main()
+
+    Dim oDDoc As DrawingDocument = ThisApplication.ActiveDocument
+    Dim search As String = CStr(SharedVariable("search"))
+
+    Dim partsDataout As New List(Of Dictionary(Of String, String))
+
+    For Each hoja As Sheet In oDDoc.Sheets
+        For Each ooPartsList As PartsList In hoja.PartsLists
+
+            If ooPartsList.Style Is oDDoc.StylesManager.PartsListStyles.Item("LDM") _
+            Or ooPartsList.Style Is oDDoc.StylesManager.PartsListStyles.Item("LDMARM") Then
+
+                Dim oPartsList As PartsList = ooPartsList
+                Dim oRows As PartsListRows = oPartsList.PartsListRows
+
+                ' Recorrer filas para ocultar
+                For i As Integer = 1 To oPartsList.PartsListRows.Count
+
+                    Dim oRow As PartsListRow = oPartsList.PartsListRows.Item(i)
+
+                    Dim cdcValue As String = CStr(oRow.Item(13).Value)
+                    Dim detalleValue As String = CStr(oRow.Item(4).Value)
+
+                    If Not cdcValue.Contains("✓") Then
+                        If detalleValue.Contains(search) Then
+                            oRow.Visible = False
+                        End If
+                    End If
+
+                Next
+
+                ' Recorrer filas para guardar datos
+                For i As Integer = 1 To oPartsList.PartsListRows.Count
+
+                    Dim row As PartsListRow = oPartsList.PartsListRows.Item(i)
+                    Dim partInfoout As New Dictionary(Of String, String)
+
+                    Dim plano As String
+                    Dim oTB1 = hoja.TitleBlock
+                    Dim Textocaja As TextBox
+
+                    Textocaja = oTB1.Definition.Sketch.TextBoxes(20)
+                    plano = CStr(oTB1.GetResultText(Textocaja))
+
+                    partInfoout.Add("PLANO:", plano)
+
+                    ' Recorrer columnas
+                    For j As Integer = 1 To oPartsList.PartsListColumns.Count
+
+                        Dim column As PartsListColumn = oPartsList.PartsListColumns.Item(j)
+                        Dim cellText As String = CStr(row.Item(j).Value)
+
+                        partInfoout(column.Title) = cellText
+
+                    Next
+
+                    ' Saltar si no es CDC y coincide búsqueda
+                    If partInfoout.ContainsKey("CDC") Then
+                        If Not CStr(partInfoout("CDC")) = "✓" Then
+
+                            If partInfoout.ContainsKey("DETALLE / MATERIAL") AndAlso _
+                               CStr(partInfoout("DETALLE / MATERIAL")).Contains(search) Then
+                                Continue For
+                            End If
+
+                        End If
+                    End If
+
+                    ' Normalizar PRODUCTO
+                    If partInfoout.ContainsKey("DETALLE / MATERIAL") Then
+                        partInfoout("PRODUCTO") = CStr(partInfoout("DETALLE / MATERIAL"))
+                        partInfoout.Remove("DETALLE / MATERIAL")
+                    End If
+
+                    If partInfoout.ContainsKey("MATERIAL") Then
+                        partInfoout("PRODUCTO") = CStr(partInfoout("MATERIAL"))
+                        partInfoout.Remove("MATERIAL")
+                    End If
+
+                    partsDataout.Add(partInfoout)
+
+                Next
+
+                oPartsList.Delete()
+
+                ' Log
+                Dim result As String = "datos: " & vbCrLf
+
+                For Each partInfoout In partsDataout
+                    For Each key As String In partInfoout.Keys
+                        result &= key & ": " & partInfoout(key) & vbCrLf
+                    Next
+                    result &= vbCrLf
+                Next
+
+                Logger.Debug(result)
+
+                SharedVariable("DATOSOUT") = partsDataout
+
+            End If
+        Next
+    Next
+
+End Sub

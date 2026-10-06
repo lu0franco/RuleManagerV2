@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Addin Type="Standard">
+	<ClassId>{1a7a3453-e509-4689-aa1b-e7a2415dcf60}</ClassId>
+	<ClientId>{1a7a3453-e509-4689-aa1b-e7a2415dcf60}</ClientId>
+	<DisplayName>RuleManagerV2</DisplayName>
+	<Description>Rule Manager V2 para Inventor 2027</Description>
+	<Assembly>RuleManagerV2.dll</Assembly>
+	<LoadOnStartUp>1</LoadOnStartUp>
+	<UserUnloadable>1</UserUnloadable>
+	<Version>1.0</Version>
+	<SupportedSoftwareVersionGreaterThan>28..</SupportedSoftwareVersionGreaterThan>
+</Addin>

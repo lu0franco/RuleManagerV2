@@ -1,0 +1,68 @@
+﻿Sub Main()
+    ' Verificar si la pieza es de tipo chapa
+    Dim customProps As Inventor.PropertySet
+    customProps = ThisDoc.Document.PropertySets.Item("Inventor User Defined Properties")
+
+    ' Crear o establecer el valor de la propiedad "CHAPA"
+    Dim propChapa As Inventor.Property
+    propChapa = GetOrCreateProperty(customProps, "MC")
+
+    ' Crear o establecer el valor de la propiedad "PLIEGUE"
+    Dim propPliegue As Inventor.Property
+    propPliegue = GetOrCreateProperty(customProps, "CYP")
+
+    ' Crear o establecer el valor de la propiedad "MEC"
+    Dim propMEC As Inventor.Property
+    propMEC = GetOrCreateProperty(customProps, "MEC")
+
+    ' Crear o establecer el valor de la propiedad "ARM"
+    Dim propARM As Inventor.Property
+    propARM = GetOrCreateProperty(customProps, "ARM")
+
+    ' Regla iLogic para contar los patrones planos de una chapa en Inventor
+    Dim oDoc As Inventor.Document = ThisApplication.ActiveDocument
+
+    ' Verificar si el documento es una pieza de chapa
+    If TypeOf oDoc.ComponentDefinition Is SheetMetalComponentDefinition Then
+        Dim oSheetMetalCompDef As SheetMetalComponentDefinition = oDoc.ComponentDefinition
+		propChapa.Value = "✓"
+        ' Contar los patrones planos
+        Dim numPatrones As Integer = oSheetMetalCompDef.FlatPattern.FlatBendResults.Count
+        Dim numPliegues As Integer = numPatrones / 2
+
+        ' Asignar el valor según la condición para "CHAPA" y "PLIEGUE"
+        If numPliegues > 0 Then
+            propChapa.Value = "✓"
+            propPliegue.Value = "✓"
+        End If
+
+        ' Mostrar el resultado en un mensaje
+        MsgBox("Número de pliegues: " & numPliegues & vbNewLine &
+               "Propiedad CHAPA: " & propChapa.Value & vbNewLine &
+               "Propiedad PLIEGUE: " & propPliegue.Value, MsgBoxStyle.Information, "Contar Patrones Planos")
+    Else
+        ' Si no es una pieza de chapa, mostrar un mensaje de error y establecer "MEC" o "ARM" según el tipo de documento
+        MsgBox("El documento no es una pieza de chapa", MsgBoxStyle.Exclamation, "Error")
+
+        If ThisDoc.Document.DocumentType = Inventor.DocumentTypeEnum.kAssemblyDocumentObject Then
+            propARM.Value = "✓"
+        ElseIf  (propChapa.Value = " "And propARM.Value = " ") Then
+            propMEC.Value = "✓" 
+        End If
+    End If
+
+End Sub
+
+' Función para obtener o crear una propiedad en un conjunto de propiedades
+Function GetOrCreateProperty(props As Inventor.PropertySet, propName As String) As Inventor.Property
+    Dim prop As Inventor.Property
+    ' Verificar si la propiedad ya existe
+    For Each prop In props
+        If prop.Name = propName Then
+            Return prop ' Devolver la propiedad existente
+        End If
+    Next
+
+    ' Crear la propiedad si no existe
+    Return props.Add(" ", propName)
+End Function

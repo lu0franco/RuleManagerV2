@@ -1,0 +1,63 @@
+﻿Imports System.Windows.Forms
+Sub Main
+
+	'd0 = InputListBox("1) LDM NORMAL (PERFILERIA, COMERCIALES, MULTICORTE)" & vbCrLf  & "2) LDM EXTENDIDA (PERFILERIA, COMERCIALES, MULTICORTE, BULONERIA)", MultiValue.List("d0"), d0, Title := "Title", ListName := "List")
+	Dim runBULONERIA As Boolean
+	Dim oList = New String() {"1) LDM NORMAL (PERFILERIA, COMERCIALES, MULTICORTE)", "2) LDM EXTENDIDA (PERFILERIA, COMERCIALES, MULTICORTE, BULONERIA)" }
+	Dim ListUnits = New String() {}
+
+	oWhatToRun = InputListBox("Seleccione tipo de LDM", oList, oList(0), "LDM MANAGER", "Opciones disponibles", FormStartPosition.CenterScreen)
+	'_:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::		
+	If oWhatToRun = "1) LDM NORMAL (PERFILERIA, COMERCIALES, MULTICORTE)" Then
+		runBULONERIA = False
+		Call LDM(runBULONERIA)
+	End If
+
+	If oWhatToRun = "2) LDM EXTENDIDA (PERFILERIA, COMERCIALES, MULTICORTE, BULONERIA)" Then
+		runBULONERIA = True
+		Call LDM(runBULONERIA)
+	End If
+End Sub
+
+Sub LDM(runBULONERIA As Boolean)
+	SharedVariable("runBULONERIA") = runBULONERIA
+	Dim oProgressBar As Inventor.ProgressBar
+	If runBULONERIA = True Then
+
+		oProgressSteps = 4
+	Else
+		oProgressSteps = 3
+	End If
+	oProgressStep = 1
+	oProgressStaticText = "Generador de LDM:  Paso "
+	oProgressBar = ThisApplication.CreateProgressBar(False, oProgressSteps, "LDM-GENERATOR")'Big Progress Bar, use True for small
+	oProgressBar.Message = (oProgressStaticText & oProgressStep & " de " & oProgressSteps & " : Obteniendo datos")
+	oProgressBar.UpdateProgress
+	'Part Model progress bar step 1
+	iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IDW\GETDATA_V5.iLogicVb")
+	oProgressStep += 1
+	oProgressBar.Message = (oProgressStaticText & oProgressStep & " de " & oProgressSteps & " : Extrayendo datos")
+	oProgressBar.UpdateProgress
+
+	'Part Model progress bar step 2
+	iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IDW\LDMGETOUT_V5.iLogicVb")
+	oProgressStep += 1
+	oProgressBar.Message = (oProgressStaticText & oProgressStep & " de " & oProgressSteps & " : Generando Excel")
+	oProgressBar.UpdateProgress
+
+	'Part Model progress bar step 3
+	iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IDW\LDMPRINT_V5.iLogicVb")
+	oProgressStep += 1
+	oProgressBar.Message = (oProgressStaticText & oProgressStep & " de " & oProgressSteps & " : Extrayendo LDM Bulonería")
+	oProgressBar.UpdateProgress
+
+
+	Dim flagPRINT As Boolean = SharedVariable("flagPRINT")
+	If runBULONERIA = True And flagPRINT = True Then
+		'Part Model progress bar step 3
+		iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IDW\LDM buloneria GETOUT.iLogicVb")
+	End If
+	oProgressStep += 1
+	oProgressBar.UpdateProgress
+	oProgressBar.Close
+End Sub

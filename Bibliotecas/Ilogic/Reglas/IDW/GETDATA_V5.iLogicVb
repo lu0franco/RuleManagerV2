@@ -1,0 +1,167 @@
+﻿Sub main
+	' Obtener el documento activo (debe ser un dibujo)
+	Dim doc As DrawingDocument = ThisApplication.ActiveDocument
+	Dim numeroDeAlmacenamiento As String
+	Dim OT As String
+	Dim Cliente As String
+	Dim Equipo As String
+	Dim Modelo As String
+	Dim hoja As Sheet
+	Dim search As String
+	For Each hoja In doc.Sheets
+		hoja.Activate
+		If hoja.Name.Contains("CORTE") Or hoja.ExcludeFromCount = True Then
+			Continue For
+		End If
+		'MsgBox("hoja actual: " & hoja.Name & "hoja 1: " & doc.Sheets.Item(1).Name)
+		If hoja.Name = doc.Sheets.Item(1).Name
+			Dim viewindex As Integer = 1
+			Dim flag As Integer = 0
+			Dim referencedFilePath As String
+			Do While flag <> 1
+				
+				Dim view As DrawingView = hoja.DrawingViews(viewindex)
+				' Obtener la ruta del archivo referenciado desde la vista
+				referencedFilePath = view.ReferencedFile.FullFileName
+				'MsgBox(referencedFilePath)
+				' Verificar si el archivo referenciado es un documento de pieza o ensamblaje
+				If referencedFilePath.EndsWith(".ipt", StringComparison.OrdinalIgnoreCase) Or referencedFilePath.EndsWith(".iam", StringComparison.OrdinalIgnoreCase) Then
+					' Es un documento de pieza o ensamblaje, realizar operaciones según sea necesario
+					flag = 1
+				Else
+					viewindex=viewindex+1
+				End If
+			Loop
+			Dim docref As Document
+			docref = ThisApplication.Documents.Open(referencedFilePath, False)
+
+			' Acceder a las propiedades estándar de la pieza o ensamblaje
+			Dim standardProperties As PropertySet
+			standardProperties = docref.PropertySets.Item("Design Tracking Properties")
+			OT = standardProperties.Item("Project").Value
+			Cliente = standardProperties.Item("Vendor").Value
+			Equipo = standardProperties.Item("Part Number").Value
+			Modelo = standardProperties.Item("Stock Number").Value
+			' Obtener el valor de N° de pieza y N° de almacenamiento
+			numeroDeAlmacenamiento = standardProperties.Item("Stock Number").Value
+			' Cerrar el documento de pieza o ensamblaje después de usarlo
+			'doc.Close()
+			Dim parts() As String = Split(numeroDeAlmacenamiento, ".") ' Resultado: Array con {"Hola", " Mundo", " iLogic"}
+			'MsgBox(numeroDeAlmacenamiento)
+			' Acceder a las partes individuales
+			'MsgBox(hoja.Name)
+			'MsgBox(parts(0))
+			'MsgBox(parts(1))
+			'MsgBox(parts(2))
+			search = parts(0) & "." & parts(1) & "." & parts(2) ' Resultado: "Hola"
+			'MsgBox(search)
+
+			SharedVariable("search") = search
+			SharedVariable("OT") = OT
+			SharedVariable("Cliente") = Cliente
+			SharedVariable("Equipo") = Equipo
+			SharedVariable("Modelo") = Modelo
+		End If
+
+
+
+		'________________________________________________________________________________________________________________
+		'''SharedVariable("hoja") = hoja
+		'iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IDW\GENLDM.iLogicVb")
+
+		'Dim hoja As Sheet = SharedVariable("hoja")
+		Dim item As Integer = 1
+		For Each ooPartsList As PartsList In hoja.PartsLists
+			item += 1
+			'MsgBox(item)
+		Next
+		Dim oPartsList As PartsList
+		On Error Resume Next
+		oPartsList = hoja.PartsLists.Item(item)
+		'[
+		If Err.Number <> 0 Then
+			Dim oView As DrawingView = hoja.DrawingViews.Item(1)
+
+			Dim oBorder As Border = hoja.Border
+			Dim oPoint As Point2d
+			'[
+			If oBorder IsNot Nothing Then
+				' A border exists. The placement point
+				' is the top-right corner of the border.
+				oPoint = oBorder.RangeBox.MaxPoint
+			Else
+				' There is no border. The placement point
+				' is the top-right corner of the sheet.
+				oPoint = ThisApplication.TransientGeometry.CreatePoint2d(hoja.Width, hoja.Height)
+			End If
+			']
+			'You will have To customise the name I'm using here to one that exists in your library, that you want to use.
+			Dim referencedFilePath As String
+			referencedFilePath = oView.ReferencedFile.FullFileName
+			' Verificar si el archivo referenciado es un documento de pieza o ensamblaje
+			'[
+			If referencedFilePath.EndsWith(".ipt", StringComparison.OrdinalIgnoreCase) Then
+				'MsgBox("pieza")
+				Dim oPListStyle As PartsListStyle = doc.StylesManager.PartsListStyles.Item("LDM")
+				Dim oPList As PartsList = hoja.PartsLists.Add(oView, oPoint)
+				oPList.Style = oPListStyle
+				'MsgBox("LDM")
+			Else
+				'MsgBox("Ensamblaje")
+				Dim oPListStyle As PartsListStyle = doc.StylesManager.PartsListStyles.Item("LDMARM")
+				Dim oPList As PartsList = hoja.PartsLists.Add(oView, oPoint, PartsListLevelEnum.kPartsOnly)
+				oPList.Style = oPListStyle
+				'MsgBox("LDMARM")
+			End If
+			'			Dim refFile As Object
+			'			refFile = oView.ReferencedFile
+			'			' Verificar si el archivo referenciado es un documento de pieza o ensamblaje
+			'[
+			'			If refFile.Definition.Type = 100663808 Then
+
+			'				MsgBox("Ensamblaje")
+			'				Dim oPListStyle As PartsListStyle = doc.StylesManager.PartsListStyles.Item("LDMARM")
+			'				Dim oPList As PartsList = hoja.PartsLists.Add(oView, oPoint, PartsListLevelEnum.kPartsOnly)
+			'				oPList.Style = oPListStyle
+			'			Else
+			'				MsgBox("pieza")
+			'				Dim oPListStyle As PartsListStyle = doc.StylesManager.PartsListStyles.Item("LDM")
+			'				Dim oPList As PartsList = hoja.PartsLists.Add(oView, oPoint)
+			'				oPList.Style = oPListStyle
+			'			End If
+			']
+			' Crear una lista para almacenar los datos
+			Dim partsDataout As New List(Of Dictionary(Of String, String))
+			'[
+			' Recorrer las filas de la tabla de piezas
+			For i As Integer = 1 To oPartsList.PartsListRows.Count
+				Dim row As PartsListRow = oPartsList.PartsListRows.Item(i)
+				Dim partInfoout As New Dictionary(Of String, String)
+
+				' Recorrer las columnas y extraer los datos
+				For j As Integer = 1 To oPartsList.PartsListColumns.Count
+					Dim column As PartsListColumn = oPartsList.PartsListColumns.Item(j)
+					Dim cellText As String = row.Item(j).Value
+
+					' Usar el nombre de la columna como clave para el diccionario
+					partInfoout(column.Title) = cellText
+				Next
+				' Verificar si "DETALLE / MATERIAL" está presente y si contiene "D-145"
+				If partInfoout.ContainsKey("DETALLE / MATERIAL") AndAlso partInfoout("DETALLE / MATERIAL").Contains(search) Then
+					' Si "DETALLE / MATERIAL" contiene "D-145", ignorar este registro
+					Continue For
+				End If
+				' Agregar la información de la fila a la lista
+				partsDataout.Add(partInfoout)
+
+			Next
+			']
+
+		End If
+
+
+
+		'________________________________________________________________________________________________________________
+
+	Next
+End Sub

@@ -1,0 +1,334 @@
+﻿'========================================================
+' REGLA ILOGIC - NOMBRAR PARTES (RENOMBRE REAL)
+'========================================================
+
+Sub Main()
+
+    Dim oAsmDoc As AssemblyDocument = ThisApplication.ActiveDocument
+
+    If Not TypeOf oAsmDoc Is AssemblyDocument Then
+        MsgBox("Esta regla debe ejecutarse desde un ensamblaje.")
+        Exit Sub
+    End If
+
+    Dim oAllOccurrences As New List(Of ComponentOccurrence)
+    GetAllOccurrences(oAsmDoc.ComponentDefinition.Occurrences, oAllOccurrences)
+
+    If oAllOccurrences.Count = 0 Then
+        MsgBox("No se encontraron componentes.")
+        Exit Sub
+    End If
+
+    Dim iProcessed As Integer = 0
+    Dim iSkipped As Integer = 0
+    Dim iErrors As Integer = 0
+    Dim sLog As String = ""
+
+    For Each oOcc As ComponentOccurrence In oAllOccurrences
+
+        Try
+
+            ' Omitir especiales
+            If IsSpecialComponent(oOcc) Then
+                sLog &= "⏭ OMITIDO (Especial): " & oOcc.Name & vbCrLf
+                iSkipped += 1
+                Continue For
+            End If
+
+            ' Omitir Content Center
+            If IsContentCenterComponent(oOcc) Then
+                sLog &= "⏭ OMITIDO (Content Center): " & oOcc.Name & vbCrLf
+                iSkipped += 1
+                Continue For
+            End If
+
+            Dim oDoc As Document = Nothing
+            Dim bIsAssembly As Boolean = False
+
+            If Not GetSafeDocument(oOcc, oDoc, bIsAssembly) Then
+                sLog &= "⏭ OMITIDO (No accesible): " & oOcc.Name & vbCrLf
+                iSkipped += 1
+                Continue For
+            End If
+
+            Dim sOriginalPath As String = oDoc.FullFileName
+
+            If String.IsNullOrEmpty(sOriginalPath) Then
+                sLog &= "⏭ OMITIDO (Sin archivo): " & oOcc.Name & vbCrLf
+                iSkipped += 1
+                Continue For
+            End If
+
+            If Not System.IO.File.Exists(sOriginalPath) Then
+                sLog &= "⏭ OMITIDO (Archivo inexistente): " & oOcc.Name & vbCrLf
+                iSkipped += 1
+                Continue For
+            End If
+
+            Dim sResult As String = ProcessComponent(oDoc, sOriginalPath, bIsAssembly)
+            sLog &= sResult & vbCrLf
+
+            If sResult.StartsWith("✓") Then
+                iProcessed += 1
+            ElseIf sResult.StartsWith("✗") Then
+                iErrors += 1
+            End If
+
+        Catch ex As Exception
+            sLog &= "✗ ERROR GENERAL: " & oOcc.Name & " - " & ex.Message & vbCrLf
+            iErrors += 1
+        End Try
+
+    Next
+
+    oAsmDoc.Save()
+
+    MsgBox( _
+        "PROCESADOS: " & iProcessed & vbCrLf & _
+        "OMITIDOS: " & iSkipped & vbCrLf & _
+        "ERRORES: " & iErrors & vbCrLf & vbCrLf & _
+        sLog)
+
+End Sub
+
+
+'========================================================
+' OBTENER TODAS LAS OCURRENCIAS
+'========================================================
+Sub GetAllOccurrences(ByVal oOccurrences As ComponentOccurrences, _
+                      ByVal oList As List(Of ComponentOccurrence))
+
+    For Each oOcc As ComponentOccurrence In oOccurrences
+
+        Try
+            oList.Add(oOcc)
+
+            Dim oDef As ComponentDefinition = Nothing
+
+            Try
+                oDef = oOcc.Definition
+            Catch
+                Continue For
+            End Try
+
+            If oDef Is Nothing Then Continue For
+
+            If TypeOf oDef Is AssemblyComponentDefinition Then
+                If Not IsSpecialComponent(oOcc) Then
+                    Try
+                        GetAllOccurrences(CType(oDef, AssemblyComponentDefinition).Occurrences, oList)
+                    Catch
+                    End Try
+                End If
+            End If
+
+        Catch
+            Continue For
+        End Try
+
+    Next
+
+End Sub
+
+
+'========================================================
+' COMPONENTES ESPECIALES
+'========================================================
+Function IsSpecialComponent(ByVal oCompOcc As ComponentOccurrence) As Boolean
+
+    Try
+
+        Dim sName As String = oCompOcc.Name.ToUpper()
+
+        If sName.Contains("TUBE") OrElse _
+           sName.Contains("PIPE") OrElse _
+           sName.Contains("CAÑO") OrElse _
+           sName.Contains("TUBERIA") OrElse _
+           sName.Contains("CABLE") OrElse _
+           sName.Contains("HARNESS") OrElse _
+           sName.Contains("ROUTING") OrElse _
+           sName.Contains("WELDMENT") Then
+            Return True
+        End If
+
+        If sName.StartsWith("FRAME") OrElse _
+           sName.Contains("SKELETON") Then
+            Return True
+        End If
+
+        If System.Text.RegularExpressions.Regex.IsMatch(sName, "^FRAME[:0-9]") Then
+            Return True
+        End If
+
+        Return False
+
+    Catch
+        Return True
+    End Try
+
+End Function
+
+
+'========================================================
+' CONTENT CENTER
+'========================================================
+Function IsContentCenterComponent(ByVal oCompOcc As ComponentOccurrence) As Boolean
+
+    Try
+
+        Dim oDoc As Document = Nothing
+
+        Try
+            oDoc = oCompOcc.Definition.Document
+        Catch
+            Return False
+        End Try
+
+        If oDoc Is Nothing Then Return False
+
+        Dim sPath As String = oDoc.FullFileName.ToUpper()
+
+        If sPath.Contains("CONTENT CENTER") Then Return True
+
+        Return False
+
+    Catch
+        Return False
+    End Try
+
+End Function
+
+
+'========================================================
+' DOCUMENTO SEGURO
+'========================================================
+Function GetSafeDocument(ByVal oOcc As ComponentOccurrence, _
+                         ByRef oDoc As Document, _
+                         ByRef bIsAssembly As Boolean) As Boolean
+
+    Try
+
+        If TypeOf oOcc.Definition Is PartComponentDefinition Then
+            oDoc = oOcc.Definition.Document
+            bIsAssembly = False
+            Return True
+        End If
+
+        If TypeOf oOcc.Definition Is AssemblyComponentDefinition Then
+            oDoc = oOcc.Definition.Document
+            bIsAssembly = True
+            Return True
+        End If
+
+        Return False
+
+    Catch
+        Return False
+    End Try
+
+End Function
+
+
+'========================================================
+' PROCESAR COMPONENTE
+'========================================================
+Function ProcessComponent(ByVal oDoc As Document, _
+                          ByVal sOriginalPath As String, _
+                          ByVal bIsAssembly As Boolean) As String
+
+    Try
+
+        Dim sPartNumber As String = GetPropertyValue(oDoc, "Part Number")
+        Dim sStockNumber As String = GetPropertyValue(oDoc, "Stock Number")
+        Dim sCom As String = GetCustomPropertyValue(oDoc, "COM")
+
+        If String.IsNullOrEmpty(sPartNumber) Then
+            Return "⚠ SIN PART NUMBER: " & oDoc.DisplayName
+        End If
+
+        If String.IsNullOrEmpty(sStockNumber) Then
+            sStockNumber = GetPropertyValue(oDoc, "Description")
+        End If
+
+        If String.IsNullOrEmpty(sStockNumber) Then
+            sStockNumber = "SIN-DESCRIPCION"
+        End If
+
+        sPartNumber = CleanFileName(sPartNumber)
+        sStockNumber = CleanFileName(sStockNumber)
+
+        Dim sExt As String = If(bIsAssembly, ".iam", ".ipt")
+        Dim sNewName As String = ""
+
+        If sCom = "✓" Then
+            sNewName = sPartNumber & sExt
+        Else
+            sNewName = sStockNumber & " - " & sPartNumber & sExt
+        End If
+
+        Dim sFolder As String = System.IO.Path.GetDirectoryName(sOriginalPath)
+        Dim sNewPath As String = System.IO.Path.Combine(sFolder, sNewName)
+
+        If sOriginalPath = sNewPath Then
+            Return "⏭ SIN CAMBIO: " & oDoc.DisplayName
+        End If
+
+        If System.IO.File.Exists(sNewPath) Then
+            Return "⚠ DESTINO EXISTE: " & sNewName
+        End If
+
+        ' ESTA ES LA CLAVE:
+        ' TRUE = renombra de verdad y mantiene vínculos de drawings
+        oDoc.SaveAs(sNewPath, True)
+
+        Return "✓ OK: " & oDoc.DisplayName & " → " & sNewName
+
+    Catch ex As Exception
+        Return "✗ ERROR: " & oDoc.DisplayName & " - " & ex.Message
+    End Try
+
+End Function
+
+
+'========================================================
+' PROPIEDADES
+'========================================================
+Function GetPropertyValue(ByVal oDoc As Document, ByVal sPropName As String) As String
+
+    Try
+        Return oDoc.PropertySets.Item("Design Tracking Properties").Item(sPropName).Value.ToString()
+    Catch
+        Return ""
+    End Try
+
+End Function
+
+
+Function GetCustomPropertyValue(ByVal oDoc As Document, ByVal sPropName As String) As String
+
+    Try
+        Return oDoc.PropertySets.Item("Inventor User Defined Properties").Item(sPropName).Value.ToString()
+    Catch
+        Return ""
+    End Try
+
+End Function
+
+
+'========================================================
+' LIMPIAR NOMBRE
+'========================================================
+Function CleanFileName(ByVal sInput As String) As String
+
+    If String.IsNullOrEmpty(sInput) Then Return ""
+
+    Dim sInvalid As String = "\/:*?""<>|"
+    Dim sResult As String = sInput
+
+    For Each c As Char In sInvalid
+        sResult = sResult.Replace(c, "-")
+    Next
+
+    Return sResult.Trim()
+
+End Function

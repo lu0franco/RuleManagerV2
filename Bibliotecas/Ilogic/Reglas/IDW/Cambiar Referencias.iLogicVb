@@ -1,0 +1,18 @@
+﻿Sub Main()
+
+
+Dim oDoc As DrawingDocument = ThisApplication.ActiveDocument
+
+Dim selectedSheet As Sheet = ThisApplication.CommandManager.Pick(SelectionFilterEnum.kDrawingSheetFilter, "Seleccione una hoja")
+Dim oDocTemp As DrawingDocument = ThisApplication.Documents.Add(kDrawingDocumentObject)
+selectedSheet.CopyTo(oDocTemp)
+Dim fd As FileDialog
+Call ThisApplication.CreateFileDialog(fd)
+fd.Filter = "Archivos de Autodesk Inventor (*.dwg;*.idw;*.iam;*.ipt;*.ipn;*.ide)"
+Dim strFileName As String
+fd.ShowOpen
+strFileName = fd.FileName
+oDocTemp.ReferencedDocumentDescriptors.Item(1).ReferencedFileDescriptor.ReplaceReference(strFileName)
+oDocTemp.Sheets.Item(2).CopyTo(oDoc)
+oDocTemp.Close(True)
+End Sub

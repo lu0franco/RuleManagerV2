@@ -1,0 +1,132 @@
+﻿' Regla externa: CrearPlanoEnCara.iLogicVb
+
+Sub Main
+	Dim timer As New System.Timers.Timer(1000) ' Tiempo en milisegundos (1000 ms = 1 segundo)
+	AddHandler timer.Elapsed, AddressOf OnTimedEvent
+	timer.AutoReset = False ' Para que el temporizador no se reinicie automáticamente
+	timer.Start()
+End Sub
+
+Sub OnTimedEvent(sender As Object, e As System.Timers.ElapsedEventArgs)
+
+    ' Usar ThisDoc para obtener el documento de la pieza incluso en edición in situ
+    Dim doc As Document
+    doc = ThisDoc.Document
+
+    ' Verifica que sea una pieza
+'    If doc.DocumentType <> kPartDocumentObject Then
+'        MsgBox("Este script solo funciona dentro de un documento de pieza.")
+'        Exit Sub
+'    End If
+
+    ' Obtiene el documento de pieza y su definición
+    Dim partDoc As PartDocument
+    partDoc = doc
+
+    Dim partDef As PartComponentDefinition
+    partDef = partDoc.ComponentDefinition
+
+    ' Seleccionar una cara plana
+    Dim selFace As Face
+    selFace = ThisApplication.CommandManager.Pick(kPartFacePlanarFilter, "Selecciona una cara plana")
+    If selFace Is Nothing Then
+        MsgBox("No se seleccionó ninguna cara.")
+        Exit Sub
+    End If
+
+    ' Obtener el plano subyacente y centroide para anclar el WorkPlane
+    Dim facePlane As Plane
+    facePlane = selFace.Geometry
+
+    Dim centroid As Point
+    centroid = selFace.PointOnFace
+
+    ' Calcular la orientación X/Y como antes (eje x en la arista más larga)
+    Dim tg As TransientGeometry
+    tg = ThisApplication.TransientGeometry
+
+    Dim testEdge As Edge
+    Dim longDir As UnitVector = Nothing
+    Dim longLength As Double = 0
+    For Each testEdge In selFace.Edges
+        If testEdge.GeometryType = kLineSegmentCurve Then
+            Dim lengthVec As Vector
+            lengthVec = testEdge.StartVertex.Point.VectorTo(testEdge.StopVertex.Point)
+            If lengthVec.Length > longLength Then
+                longLength = lengthVec.Length
+                longDir = lengthVec.AsUnitVector
+            End If
+        End If
+    Next
+
+    Dim xVec As UnitVector, yVec As UnitVector
+    Dim pi As Double = 4 * Atan(1)
+    If Not longDir Is Nothing Then
+        xVec = longDir
+        yVec = facePlane.Normal.CrossProduct(xVec)
+    Else
+        ' Alternativa si no hay aristas lineales
+        Dim angleDiff As Double
+        Dim testVec As UnitVector
+        testVec = tg.CreateUnitVector(1, 0, 0)
+        angleDiff = Abs((pi / 2) - facePlane.Normal.AngleTo(testVec))
+        xVec = testVec
+
+        testVec = tg.CreateUnitVector(0, 1, 0)
+        If Abs((pi / 2) - facePlane.Normal.AngleTo(testVec)) < angleDiff Then
+            angleDiff = Abs((pi / 2) - facePlane.Normal.AngleTo(testVec))
+            xVec = testVec
+        End If
+
+        testVec = tg.CreateUnitVector(0, 0, 1)
+        If Abs((pi / 2) - facePlane.Normal.AngleTo(testVec)) < angleDiff Then
+            xVec = testVec
+        End If
+
+        yVec = facePlane.Normal.CrossProduct(xVec)
+        xVec = yVec.CrossProduct(facePlane.Normal)
+    End If
+
+    ' Crear un WorkPlane fijo en la cara a 0 mm
+
+	Dim oSheetMetalDoc As PartDocument
+oSheetMetalDoc = ThisApplication.ActiveEditDocument
+
+' a reference to the component definition.
+Dim oCompDef As SheetMetalComponentDefinition
+oCompDef = oSheetMetalDoc.ComponentDefinition
+
+' a reference to the sheet metal features collection.
+Dim oSheetMetalFeatures As SheetMetalFeatures
+oSheetMetalFeatures = oCompDef.Features
+
+Dim oFace As Face
+
+'Keep Selecting Faces, Hit Esc to finish
+Do
+    oFace = ThisApplication.CommandManager.Pick(SelectionFilterEnum.kAllPlanarEntities, "Select a face")
+    If Not oFace Is Nothing Then 
+        Exit Do
+    End If
+Loop While Not oFace Is Nothing
+
+' Get the outer loop of the face.
+Dim outerLoop As EdgeLoop
+For Each outerLoop In oFace.EdgeLoops
+    If outerLoop.IsOuterEdgeLoop Then
+        Exit For
+    End If
+Next
+
+' Create a workpoint at the edge mid-point
+Dim oWorkPoint As WorkPoint
+oWorkPoint = oCompDef.WorkPoints.AddAtCentroid(outerLoop)
+
+Dim oPointPlacement As PointHolePlacementDefinition 
+oPointPlacement = oCompDef.Features.HoleFeatures.CreatePointPlacementDefinition(oWorkPoint, oFace)
+
+    Dim wp As WorkPlane
+    wp = oCompDef.WorkPlanes.AddFixed(oWorkPoint, xVec, yVec)
+    ' Guardar el plano en SharedVariable para uso externo
+    SharedVariable("PlanoCreado") = wp
+End Sub

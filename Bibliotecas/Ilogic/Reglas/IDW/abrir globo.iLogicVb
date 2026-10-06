@@ -1,0 +1,52 @@
+﻿Dim oDoc As DrawingDocument = ThisApplication.ActiveDocument
+
+
+While True
+
+	'select Balloon
+	Dim oBalloon As Balloon = Nothing
+	oBalloon = ThisApplication.CommandManager.Pick _
+	(SelectionFilterEnum.kDrawingBalloonFilter, _
+	"Select a balloon to open it's drawing. " & " (press ESC To Exit selection)")
+
+	If IsNothing(oBalloon) Then Exit While
+
+	Dim oLeader As Leader
+	If oBalloon IsNot Nothing Then oLeader = oBalloon.Leader
+	Dim oLeaderNode As LeaderNode = oLeader.AllNodes(oLeader.AllNodes.Count)
+	Dim oIntent As GeometryIntent = oLeaderNode.AttachedEntity
+	Dim oCurve As DrawingCurve = oIntent.Geometry
+	Dim oOcc As ComponentOccurrence = oCurve.ModelGeometry.ContainingOccurrence
+	Dim oRefDoc As Document = oOcc.Definition.Document
+	'MsgBox(oOcc.Definition.Document.PropertySets.Item("Design Tracking Properties").Item("Stock Number").Value)
+
+
+
+Dim oSheets As Sheets = oDoc.Sheets
+  
+    For Each oSheet As Sheet In oSheets
+		'MsgBox(oSheet.Name)
+        ' Agregar el nombre de la hoja a la lista
+        If oSheet.Name.Contains(oOcc.Definition.Document.PropertySets.Item("Design Tracking Properties").Item("Stock Number").Value) And Not oSheet.Name.Contains("Copia") Then
+			oSheet.Activate
+		End If
+    Next
+
+End While
+
+
+		Try
+		'get titleblock of sheet
+		Dim oTB1 = Sheet.TitleBlock
+		Dim Textocaja As TextBox
+
+		Textocaja = oTB1.Definition.Sketch.TextBoxes(19)
+		numeroDePieza = oTB1.GetResultText(Textocaja)
+		'MsgBox(numeroDePieza)
+		Textocaja = oTB1.Definition.Sketch.TextBoxes(20)
+		numeroDeAlmacenamiento = oTB1.GetResultText(Textocaja)
+		'MsgBox(numeroDeAlmacenamiento)
+
+		numeroDeAlmacenamiento = numeroDeAlmacenamiento.Replace("/", "_")
+		Catch
+		End Try

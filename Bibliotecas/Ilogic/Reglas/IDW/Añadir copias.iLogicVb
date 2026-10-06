@@ -1,0 +1,124 @@
+﻿' Regla de iLogic para verificar propiedades CYP y MEC en todas las hojas de un dibujo
+Sub Main
+' Obtén el documento del dibujo activo
+Dim oDrawingDoc As DrawingDocument = ThisApplication.ActiveDocument
+Dim pane As BrowserPane = oDrawingDoc.BrowserPanes.ActivePane
+
+
+' Lista para almacenar mensajes de coincidencias por hoja
+Dim matches As List(Of String)
+matches = New List(Of String)
+
+' Itera sobre todas las hojas del dibujo
+Dim oSheet As Sheet
+For Each oSheet In oDrawingDoc.Sheets
+	If oSheet.Name.Contains("CORTE") Then
+		Continue For
+	End If
+	    ' Variables para rastrear coincidencias en la hoja actual
+	    Dim foundCYP As Boolean
+	    Dim foundMEC As Boolean
+	    foundCYP = False
+	    foundMEC = False
+	    
+	    ' Itera sobre todas las vistas de la hoja
+    	Dim oDrawingView As DrawingView = oSheet.DrawingViews(1)
+        ' Obtén el documento de modelo de la vista
+        Dim oModelDoc As Document = oDrawingView.ReferencedDocumentDescriptor.ReferencedDocument
+  
+        ' Verifica que el documento sea una pieza
+        If oModelDoc.DocumentType = kPartDocumentObject Then
+            ' Obtén las propiedades personalizadas del documento de pieza
+            Dim oPropertySet As PropertySet
+            oPropertySet = oModelDoc.PropertySets.Item("Inventor User Defined Properties")
+            
+            ' Verifica la propiedad CYP
+            Dim oPropertyCYP As [Property]
+            On Error Resume Next
+            oPropertyCYP = oPropertySet.Item("CYP")
+            On Error GoTo 0
+            
+            ' Verifica si la propiedad CYP existe y su valor es ✓
+            If Not oPropertyCYP Is Nothing Then
+                If oPropertyCYP.Value = "✓" Then
+                   foundCYP = True
+              	End If
+            End If
+            
+            ' Verifica la propiedad MEC
+            Dim oPropertyMEC As [Property]
+            On Error Resume Next
+            oPropertyMEC = oPropertySet.Item("MEC")
+            On Error GoTo 0
+            
+            ' Verifica si la propiedad MEC existe y su valor es ✓
+            If Not oPropertyMEC Is Nothing Then
+                If oPropertyMEC.Value = "✓" Then
+                    foundMEC = True
+                End If
+            End If
+        End If
+        
+        ' Si ambas propiedades se han encontrado, no es necesario continuar verificando otras vistas
+        If foundCYP And foundMEC Then
+            Exit For
+        End If
+
+    
+    	' Agrega coincidencias encontradas en la hoja a la lista
+    	If foundCYP Or foundMEC Then
+        	Dim message As String
+        	message = "Coincidencias en hoja: " & oSheet.Name & vbCrLf
+        	If foundCYP Then
+            	message &= "- Propiedad CYP = ✓" & vbCrLf
+        	End If
+        	If foundMEC Then
+            	message &= "- Propiedad MEC = ✓" & vbCrLf
+        	End If
+	        matches.Add(message)
+			Dim MyArrayList As New ArrayList
+			For Each s In ThisDoc.Document.Sheets
+  				MyArrayList.Add(oSheet.Name)	
+			Next
+			
+	        ' Duplica la hoja actual y péguela inmediatamente después
+			oSheet.Activate
+			Dim PosOriginal = pane.GetBrowserNodeFromObject(oDrawingDoc.ActiveSheet)
+			Dim oNewSheet As Sheet = oSheet.CopyTo(oDrawingDoc)
+			oNewSheet.Activate
+			oNewSheet.ExcludeFromCount=(True)
+			Dim PosCopia = pane.GetBrowserNodeFromObject(oDrawingDoc.ActiveSheet)
+			Call pane.Reorder(PosOriginal, False, PosCopia)
+			oNewSheet.ExcludeFromCount=True
+	    	Dim sheetSizeName As String = oNewSheet.Border.Name
+			Dim X As Double=0
+			Dim Y As Double = 33.4
+			Select Case sheetSizeName
+				Case "Plantilla B3 ext-DB Final 1.2"
+					X = 68.7
+				Case "Plantilla Legal"
+					X= 19.2
+				Case "Plantilla B3"
+					X = 47
+			End Select
+			   'a reference To the GeneralNotes Object
+		    Dim oGeneralNotes As GeneralNotes = oNewSheet.DrawingNotes.GeneralNotes
+		    Dim oTG As TransientGeometry = ThisApplication.TransientGeometry
+	   		' Create text with simple string as input. Since this doesn't use
+	    	' any text overrides, it will default to the active text style.
+	    	Dim sText As String = "COPIA"
+			Dim oGeneralNote As GeneralNote = oGeneralNotes.AddFitted(oTG.CreatePoint2d(X, Y), sText)
+			
+   		End If
+Next
+
+' Mostrar todas las coincidencias encontradas por hoja
+If matches.Count > 0 Then
+    Dim finalMessage As String
+    finalMessage = "Se encontraron las siguientes coincidencias:" & vbCrLf & vbCrLf
+    finalMessage &= String.Join(vbCrLf, matches)
+    MsgBox(finalMessage)
+Else
+    MsgBox("No se encontró ninguna vista con la propiedad CYP o MEC igual a ✓.")
+End If
+End Sub

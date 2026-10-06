@@ -1,0 +1,52 @@
+﻿Sub Main()
+'  a reference to the currently active document.
+' This assumes that it is a part document.
+Dim oPart As PartDocument
+oPart = ThisApplication.ActiveDocument
+
+'  a reference to the component definition.
+Dim oDef As PartComponentDefinition
+oDef = oPart.ComponentDefinition
+
+Dim planeEnt As Object
+planeEnt = ThisApplication.CommandManager.Pick(SelectionFilterEnum.kAllPlanarEntities, "Select plane to create the sketch.")
+
+Dim oSketch As PlanarSketch
+oSketch = oDef.Sketches.Add(planeEnt)
+
+Dim sketchName As String
+sketchName = InputBox("Give your new sketch a name", "Sketch Name", "Enter Sketch Name Here")
+oSketch.Name = sketchName
+
+Dim feat As PartFeature
+feat = ThisApplication.CommandManager.Pick(SelectionFilterEnum.kPartFeatureFilter, "Select the feature to project")
+
+' Iterate over the faces that were created by the feature.
+Dim usedEdges As ObjectCollection
+usedEdges = ThisApplication.TransientObjects.CreateObjectCollection
+Dim featFace As Face
+For Each featFace In feat.Faces
+	' Iterate over the edges in the faces.
+	Dim featEdge As Edge
+	For Each featEdge In featFace.Edges
+		' Check to see if this edge has already been projected.
+		Dim checkEdge As Edge
+		Dim isUsed As Boolean
+		isUsed = False
+		For Each checkEdge In usedEdges
+			If featEdge Is checkEdge Then
+				isUsed = True
+				Exit For
+			End If
+		Next
+
+		If Not isUsed Then
+			' Project the edge onto the sketch.
+			Call oSketch.AddByProjectingEntity(featEdge)
+
+			' Add this edge to the list of used edges.
+			Call usedEdges.Add(featEdge)
+		End If
+	Next
+Next
+End Sub

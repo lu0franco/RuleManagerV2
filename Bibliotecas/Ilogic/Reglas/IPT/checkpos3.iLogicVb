@@ -1,0 +1,42 @@
+﻿
+
+Sub Main()
+    ' Definir la lista
+    ' Configurar el evento ParameterChange para detectar cambios en la lista
+    AddHandler ThisApplication.ApplicationEvents.OnDocumentChange, AddressOf DocumentChanged
+	Dim aux As Integer=0
+End Sub
+
+' Evento ParameterChange para detectar cambios en la lista
+Private Sub DocumentChanged(ByVal DocumentObject As Inventor._Document, ByVal BeforeOrAfter As Inventor.EventTimingEnum, ByVal ReasonsForChange As Inventor.CommandTypesEnum, ByVal Context As Inventor.NameValueMap, ByRef HandlingCode As Inventor.HandlingCodeEnum)
+
+
+
+'BeforeOrAfter = EventTimingEnum.kAfter And ReasonsForChange = Inventor.CommandTypesEnum.kNonShapeEditCmdType
+If CallCheck(aux) = 0 And Context.Item("InternalName") = "GBOMEditor" And BeforeOrAfter = Inventor.EventTimingEnum.kBefore Then
+	'Logger.Debug("ejecutado")
+    Dim timer As New System.Timers.Timer(1000) ' Tiempo en milisegundos (1000 ms = 1 segundo)
+    AddHandler timer.Elapsed, AddressOf OnTimedEvent
+    timer.AutoReset = False ' Para que el temporizador no se reinicie automáticamente
+    timer.Start()
+End If
+
+
+
+
+
+End Sub
+Sub OnTimedEvent(sender As Object, E As System.Timers.ElapsedEventArgs)
+    ' Tu código aquí para ejecutar después de un segundo
+    ' Por ejemplo:
+	    'MsgBox("Ha pasado un segundo")
+			'Logger.Debug("tiempo")
+	iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IPT\Renum.iLogicVb")
+End Sub
+Function CallCheck(aux) As Integer
+	'Logger.Debug(aux)
+	If HandlingCode = Inventor.HandlingCodeEnum.kEventHandled Then
+		aux += 1
+	End If
+		Return aux
+	End Function

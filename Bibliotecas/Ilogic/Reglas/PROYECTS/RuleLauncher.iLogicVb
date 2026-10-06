@@ -1,0 +1,16 @@
+﻿Sub Main()
+    ' Definir la lista
+ThisApplication.CommandManager.ControlDefinitions("AppShowHomeBaseCmd").Execute
+MsgBox("aaaa bien")
+    ' Configurar el evento ParameterChange para detectar cambios en la lista
+    AddHandler ThisApplication.ApplicationEvents.OnReady , AddressOf OnReady
+End Sub
+
+' Evento ParameterChange para detectar cambios en la lista
+Private Sub OnReady(ByVal BeforeOrAfter As Inventor.EventTimingEnum, ByVal Context As Inventor.NameValueMap, ByRef HandlingCode As Inventor.HandlingCodeEnum)
+
+iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\PROYECTS\CreateFolders.iLogicVb")
+iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\PROYECTS\ChargeLibraries.iLogicVb")
+MsgBox("aaaa")
+
+End Sub

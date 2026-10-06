@@ -1,0 +1,49 @@
+﻿
+
+Sub Main()
+' Definir la lista
+' Configurar el evento ParameterChange para detectar cambios en la lista
+ThisApplication.CommandManager.ControlDefinitions("AppShowHomeBaseCmd").Execute
+AddHandler ThisApplication.ApplicationEvents.OnActiveProjectChanged, AddressOf OnActiveProjectChanged
+AddHandler ThisApplication.ApplicationEvents.OnNewDocument, AddressOf OnNewDocument
+End Sub
+
+' Evento ParameterChange para detectar cambios en la lista
+Private Sub OnActiveProjectChanged(ByVal ProjectObject As DesignProject, ByVal BeforeOrAfter As Inventor.EventTimingEnum, ByVal Context As Inventor.NameValueMap, ByRef HandlingCode As Inventor.HandlingCodeEnum)
+	' Obtén el documento activo
+	Call functionCharge
+
+
+	' MessageBox.Show("Error al agregar la Asset Library: " & ex.Message)
+
+
+End Sub
+' Evento ParameterChange para detectar cambios en la lista
+Private Sub OnNewDocument(ByVal DocumentObject As Inventor.Document, ByVal BeforeOrAfter As Inventor.EventTimingEnum, ByVal Context As Inventor.NameValueMap, ByRef HandlingCode As Inventor.HandlingCodeEnum)
+	' Obtén el documento activo
+	Call functionCharge
+
+	' MessageBox.Show("Error al agregar la Asset Library: " & ex.Message)
+
+
+End Sub
+
+Function functionCharge
+	MsgBox("CARGAMOS")
+	Dim invApp As Inventor.Application = ThisApplication
+	Dim projectManager As Inventor.DesignProjectManager = invApp.DesignProjectManager
+	' Especifica la ruta de la Asset Library
+	Dim assetLibraryPath1 As String = "D:\Bibliotecas\Materiales\METALES DB.adsklib"
+	Dim assetLibraryPath2 As String = "D:\Bibliotecas\Materiales\DEFAULT.adsklib"
+	Dim assetLibraryPath3 As String = "D:\Bibliotecas\Materiales\PLASTICOS DB.adsklib"
+	Dim assetLibraryPath4 As String = "D:\Bibliotecas\Materiales\DE BLASI MAT.adsklib"
+	' Carga la Asset Library al proyecto
+	Dim libs As ProjectAssetLibraries = projectManager.ActiveDesignProject.MaterialLibraries
+	Try
+	libs.Add(assetLibraryPath1)
+	libs.Add(assetLibraryPath2)
+	libs.Add(assetLibraryPath3)
+	libs.Add(assetLibraryPath4)
+	Catch
+	End Try
+	End Function

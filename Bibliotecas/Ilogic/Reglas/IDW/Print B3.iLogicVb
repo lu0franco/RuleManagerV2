@@ -1,0 +1,94 @@
+﻿Sub Main()
+
+    Dim oDrawDoc As DrawingDocument
+    oDrawDoc = ThisApplication.ActiveDocument
+
+    '====================================================
+    ' Marcar qué hojas se exportan
+    '====================================================
+    For Each oSheet As Sheet In oDrawDoc.Sheets
+
+        Dim imprimir As Boolean = False
+
+        Try
+            If Not oSheet.Border Is Nothing Then
+                If oSheet.Border.Name = "Plantilla B3" Then
+                    imprimir = True
+                End If
+            End If
+        Catch
+        End Try
+
+        oSheet.ExcludeFromPrinting = Not imprimir
+
+    Next
+
+    '====================================================
+    ' PDF Translator
+    '====================================================
+    Dim PDFAddIn As TranslatorAddIn
+    PDFAddIn = ThisApplication.ApplicationAddIns.ItemById( _
+        "{0AC6FD96-2F4D-42CE-8BE0-8AEA580399E4}")
+
+    Dim oContext As TranslationContext
+    oContext = ThisApplication.TransientObjects.CreateTranslationContext
+
+    oContext.Type = IOMechanismEnum.kFileBrowseIOMechanism
+
+    Dim oOptions As NameValueMap
+    oOptions = ThisApplication.TransientObjects.CreateNameValueMap
+
+    If PDFAddIn.HasSaveCopyAsOptions(oDrawDoc, oContext, oOptions) Then
+
+        oOptions.Value("Sheet_Range") = _
+            Inventor.PrintRangeEnum.kPrintAllSheets
+
+        oOptions.Value("All_Color_AS_Black") = False
+        oOptions.Value("Remove_Line_Weights") = False
+        oOptions.Value("Vector_Resolution") = 600
+
+    End If
+
+    '====================================================
+    ' Nombre del PDF
+    '====================================================
+    Dim nombreBase As String
+    nombreBase = System.IO.Path.GetFileNameWithoutExtension( _
+        oDrawDoc.FullFileName)
+
+    Dim carpeta As String
+    carpeta = System.IO.Path.GetDirectoryName( _
+        oDrawDoc.FullFileName)
+
+    Dim pdfFileFinal As String
+    pdfFileFinal = System.IO.Path.Combine( _
+        carpeta, _
+        nombreBase & " B3.pdf")
+
+    '====================================================
+    ' Exportar PDF
+    '====================================================
+    Dim oDataMedium As DataMedium
+    oDataMedium = ThisApplication.TransientObjects.CreateDataMedium
+
+    oDataMedium.FileName = pdfFileFinal
+
+    PDFAddIn.SaveCopyAs( _
+        oDrawDoc, _
+        oContext, _
+        oOptions, _
+        oDataMedium)
+
+    '====================================================
+    ' Restaurar hojas
+    '====================================================
+    For Each oSheet As Sheet In oDrawDoc.Sheets
+        oSheet.ExcludeFromPrinting = False
+    Next
+
+    MessageBox.Show( _
+        "PDF generado correctamente:" & vbCrLf & vbCrLf & _
+        pdfFileFinal, _
+        "Exportación PDF")
+
+End Sub

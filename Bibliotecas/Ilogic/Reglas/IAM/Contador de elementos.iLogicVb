@@ -1,0 +1,102 @@
+﻿Sub Main()
+
+    If ThisApplication.ActiveDocument.DocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
+        Dim assemblyDoc As AssemblyDocument
+        assemblyDoc = ThisApplication.ActiveDocument
+    ' Crear un diccionario para almacenar los nombres de las subocurrencias y sus conteos
+    Dim subOccurrenceCounts As New Dictionary(Of String, Integer)
+
+    ' Analizar el ensamblaje principal en busca de subensamblajes y subocurrencias
+    AnalyzeSubAssemblies(assemblyDoc.ComponentDefinition.Occurrences, subOccurrenceCounts)
+
+    ' Mostrar los resultados
+   ' For Each subOccurrenceName As String In subOccurrenceCounts.Keys
+     '   MsgBox("Número de veces que la subocurrencia '" & subOccurrenceName & "' aparece: " & subOccurrenceCounts(subOccurrenceName))
+    'Next
+
+   ' MsgBox("Se han contabilizado los elementos", vbInformation, "Éxito")
+end if
+End Sub
+
+Sub AnalyzeSubAssemblies(occurrences As ComponentOccurrences, ByRef subOccurrenceCounts As Dictionary(Of String, Integer))
+    ' Iterar sobre las ocurrencias del ensamblaje actual
+    For Each oOcc As ComponentOccurrence In occurrences
+        ' Verificar si la ocurrencia está activa
+        If Not oOcc.Suppressed Then
+			If  oOcc.DefinitionDocumentType = kPartDocumentObject Then
+				If oOcc.Definition.IsContentMember Then
+					
+				Continue For
+			End If
+			End If
+            ' Obtener el conjunto de definición de la ocurrencia
+            Dim oDef As ComponentDefinition = oOcc.Definition
+
+            ' Verificar si la ocurrencia es un subensamblaje
+  
+                ' Analizar el subensamblaje en busca de subocurrencias
+                AnalyzeSubAssemblies(oOcc.SubOccurrences, subOccurrenceCounts)
+       
+
+            ' Obtener las propiedades de diseño de la ocurrencia
+            Dim properties As PropertySet = oDef.Document.PropertySets.Item("Design Tracking Properties")
+
+            ' Obtener el nombre y el número de almacenamiento de la ocurrencia
+            Dim nombre As String = GetPropertyValue(properties, "Part Number")
+            Dim numero_de_almacenamiento As String = GetPropertyValue(properties, "Stock Number")
+
+            ' Verificar si los valores son nulos y asignar valores predeterminados si es necesario
+            If String.IsNullOrEmpty(nombre) Then
+                nombre = "Sin nombre"
+            End If
+            If String.IsNullOrEmpty(numero_de_almacenamiento) Then
+                numero_de_almacenamiento = "Sin número de almacenamiento"
+            End If
+
+            ' Crear una clave única para la ocurrencia basada en su nombre y número de almacenamiento
+            Dim key As String = nombre & "_" & numero_de_almacenamiento
+				MsgBox(key)
+            ' Verificar si la ocurrencia ya está en el diccionario y actualizar el contador
+            If subOccurrenceCounts.ContainsKey(key) Then
+                subOccurrenceCounts(key) += 1
+            Else
+                subOccurrenceCounts.Add(key, 1)
+            End If
+			            ' Crear o establecer la propiedad personalizada 'CANTIDAD_USADA' en la ocurrencia
+			
+			        Dim customProps As PropertySet
+                    Try
+                        customProps = oDef.Document.PropertySets.Item("Inventor User Defined Properties")
+                    Catch ex As Exception
+                        customProps = oDef.Document.PropertySets.Add("Inventor User Defined Properties")
+                    End Try
+
+                    ' Crear o establecer el valor de la propiedad "MC"
+                    Dim propCU As [Property]
+                    propCU = GetOrCreateProperty(customProps, "CANTIDAD_USADA")
+					'MsgBox(oOcc.Name)
+					propCU.Value = subOccurrenceCounts(key)
+        End If
+    Next
+End Sub
+' Función para obtener o crear una propiedad en un conjunto de propiedades
+Function GetOrCreateProperty(props As Inventor.PropertySet, propName As String) As Inventor.Property
+    Dim prop As Inventor.Property
+    ' Verificar si la propiedad ya existe
+    For Each prop In props
+        If prop.Name = propName Then
+            Return prop ' Devolver la propiedad existente
+        End If
+    Next
+
+    ' Crear la propiedad si no existe
+    Return props.Add(" ", propName)
+End Function
+
+Function GetPropertyValue(properties As PropertySet, propertyName As String) As String
+    Try
+        Return properties.Item(propertyName).Value
+    Catch ex As Exception
+        Return ""
+    End Try
+End Function

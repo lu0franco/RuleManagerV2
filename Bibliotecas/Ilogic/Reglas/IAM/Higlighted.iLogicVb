@@ -1,0 +1,144 @@
+﻿'=========================================================
+' HIGHLIGHTED_V3  –  sin usar .Name  (VERSIÓN FINAL)
+'=========================================================
+Sub Main()
+    Dim asmDoc As AssemblyDocument = ThisApplication.ActiveDocument
+
+    'Crear / recuperar HighlightSet
+    Dim hs As HighlightSet
+    Try
+        hs = asmDoc.HighlightSets.Item(1)          'el primero que exista
+    Catch
+        hs = asmDoc.HighlightSets.Add
+        hs.Color = ThisApplication.TransientObjects.CreateColor(255, 0, 0)
+    End Try
+
+    'Listas finales
+    Dim highlightedOccurrences As New List(Of ComponentOccurrence)
+    Dim notHighlighted As New List(Of ComponentOccurrence)
+
+    'Primera pasada: resaltar las que YA tienen COM = ✓
+    HighlightByComValue(hs, highlightedOccurrences, notHighlighted)
+
+    'Bucle de selección
+    Do
+        Dim occ As ComponentOccurrence
+        occ = ThisApplication.CommandManager.Pick(
+                  SelectionFilterEnum.kAssemblyLeafOccurrenceFilter,
+                  "Seleccione una pieza/sub-ensamblaje. ESC para terminar")
+        If occ Is Nothing Then Exit Do
+
+'Dim yaEsta As Boolean = hs.Contains(occ)   ←←←  SACÁ ESTA
+Dim yaEsta As Boolean = OccEstaResaltada(hs, occ)   '←←←  USÁ ESTA
+
+        'Aplicar/quitar resaltado y lista a TODAS las instancias del mismo archivo
+        ToggleWholeFamily(occ.Definition.Document.FullDocumentName,
+                            yaEsta, hs, highlightedOccurrences, notHighlighted)
+
+        'Actualizar listas globales para la segunda regla
+        SharedVariable("ListaIn")  = highlightedOccurrences
+        SharedVariable("ListaOut") = notHighlighted
+        ThisApplication.ActiveView.Update()
+
+    Loop
+End Sub
+
+
+'---------------------------------------------------------
+' Resalta/des-resalta TODAS las ocurrencias que usan el
+' mismo archivo (key = FullDocumentName)
+'---------------------------------------------------------
+Sub ToggleWholeFamily(key As String, quitar As Boolean, hs As HighlightSet,
+                      listaOn As List(Of ComponentOccurrence),
+                      listaOff As List(Of ComponentOccurrence))
+
+    Dim asmDoc As AssemblyDocument = ThisApplication.ActiveDocument
+    Recorrer(asmDoc.ComponentDefinition.Occurrences, key, hs, quitar, listaOn, listaOff)
+End Sub
+
+
+'---------------------------------------------------------
+' Recorrido recursivo
+'---------------------------------------------------------
+Sub Recorrer(occs As ComponentOccurrences, key As String,
+             hs As HighlightSet, quitar As Boolean,
+             listaOn As List(Of ComponentOccurrence),
+             listaOff As List(Of ComponentOccurrence))
+
+    For Each occ As ComponentOccurrence In occs
+        If occ.Suppressed Then Continue For
+
+        If occ.Definition.Document.FullDocumentName = key Then
+            If quitar Then
+                hs.Remove(occ)
+                listaOn.Remove(occ)
+                listaOff.Add(occ)
+            Else
+                hs.AddItem(occ)
+                listaOn.Add(occ)
+                listaOff.Remove(occ)
+            End If
+        End If
+
+        'Sub-ensamblajes
+        If occ.DefinitionDocumentType = kAssemblyDocumentObject Then
+            Recorrer(occ.SubOccurrences, key, hs, quitar, listaOn, listaOff)
+        End If
+    Next
+End Sub
+
+
+'---------------------------------------------------------
+' Primera pasada: resaltar las que YA tienen COM = ✓
+'---------------------------------------------------------
+Sub HighlightByComValue(hs As HighlightSet,
+                        listaOn As List(Of ComponentOccurrence),
+                        listaOff As List(Of ComponentOccurrence))
+
+    Dim asmDoc As AssemblyDocument = ThisApplication.ActiveDocument
+    RecorrerCom(asmDoc.ComponentDefinition.Occurrences, hs, listaOn, listaOff)
+End Sub
+
+Sub RecorrerCom(occs As ComponentOccurrences,
+                hs As HighlightSet,
+                listaOn As List(Of ComponentOccurrence),
+                listaOff As List(Of ComponentOccurrence))
+
+    For Each occ As ComponentOccurrence In occs
+        If occ.Suppressed Then Continue For
+
+        Dim tieneTick As Boolean = False
+        Try
+            Dim ps As PropertySet = occ.Definition.Document.PropertySets.Item("Inventor User Defined Properties")
+            tieneTick = (ps.Item("COM").Value = "✓")
+        Catch
+            tieneTick = False
+        End Try
+
+        If tieneTick Then
+            hs.AddItem(occ)
+            listaOn.Add(occ)
+        Else
+            listaOff.Add(occ)
+        End If
+
+        'Sub-ensamblajes
+        If occ.DefinitionDocumentType = kAssemblyDocumentObject Then
+            RecorrerCom(occ.SubOccurrences, hs, listaOn, listaOff)
+        End If
+    Next
+End Sub
+
+'---------------------------------------------------------
+' Devuelve TRUE si la ocurrencia ya está en el HighlightSet
+'---------------------------------------------------------
+'---------------------------------------------------------
+' Devuelve TRUE si la ocurrencia ya está en el HighlightSet
+'---------------------------------------------------------
+Function OccEstaResaltada(hs As HighlightSet, occ As ComponentOccurrence) As Boolean
+    'Recorremos la colección sin modificarla
+    For Each item As Object In hs
+        If item Is occ Then Return True
+    Next
+    Return False
+End Function

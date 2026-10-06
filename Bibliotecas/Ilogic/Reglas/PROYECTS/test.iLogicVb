@@ -1,0 +1,4 @@
+﻿Sub Main()
+MsgBox("ESTA AMNDNDO")
+ThisApplication.CommandManager.ControlDefinitions("AppShowHomeBaseCmd").Execute
+End Sub

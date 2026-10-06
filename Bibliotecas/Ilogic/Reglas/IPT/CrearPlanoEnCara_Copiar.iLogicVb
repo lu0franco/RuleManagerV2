@@ -1,0 +1,80 @@
+﻿' Regla externa: CrearPlanoEnCara.iLogicVb
+Sub Main()
+    ' Usar ThisDoc para obtener el documento de la pieza incluso en edición in situ
+    Dim doc As Document
+    doc = ThisDoc.Document
+
+    ' Verifica que sea una pieza
+    If doc.DocumentType <> kPartDocumentObject Then
+        MsgBox("Este script solo funciona dentro de un documento de pieza.")
+        Exit Sub
+    End If
+
+    Dim partDoc As PartDocument
+    partDoc = doc
+    Dim partDef As PartComponentDefinition
+    partDef = partDoc.ComponentDefinition
+
+    ' Seleccionar una cara plana
+    Dim selFace As Face
+    selFace = ThisApplication.CommandManager.Pick(kPartFacePlanarFilter, "Selecciona una cara plana")
+    If selFace Is Nothing Then
+        MsgBox("No se seleccionó ninguna cara.")
+        Exit Sub
+    End If
+
+    ' Obtener el plano subyacente de la cara
+    Dim facePlane As Plane
+    facePlane = selFace.Geometry
+
+    ' Crear un WorkPlane fijo directamente sobre la geometría del plano de la cara con offset 0
+    ' Esto garantiza que el plano se cree coplanar, tanto en pieza directa como en edición in situ
+    Dim wp As WorkPlane
+    
+    ' Calcular orientación del plano (eje X sobre arista más larga)
+    Dim tg As TransientGeometry = ThisApplication.TransientGeometry
+    Dim testEdge As Edge, longDir As UnitVector = Nothing, longLength As Double = 0
+    For Each testEdge In selFace.Edges
+        If testEdge.GeometryType = kLineSegmentCurve Then
+            Dim lengthVec As Vector = testEdge.StartVertex.Point.VectorTo(testEdge.StopVertex.Point)
+            If lengthVec.Length > longLength Then
+                longLength = lengthVec.Length
+                longDir = lengthVec.AsUnitVector
+            End If
+        End If
+    Next
+    Dim pi As Double = 4 * Atan(1)
+    Dim xVec As UnitVector, yVec As UnitVector
+    If Not longDir Is Nothing Then
+        xVec = longDir
+    Else
+        ' Si no hay arista lineal, elegir eje X más ortogonal al normal
+        Dim angleDiff As Double
+        Dim testVec As UnitVector
+        testVec = tg.CreateUnitVector(1,0,0)
+        angleDiff = Abs((pi/2) - facePlane.Normal.AngleTo(testVec))
+        xVec = testVec
+        For Each coords In New Double()() {New Double(){0,1,0}, New Double(){0,0,1}}
+            testVec = tg.CreateUnitVector(coords(0), coords(1), coords(2))
+            If Abs((pi/2) - facePlane.Normal.AngleTo(testVec)) < angleDiff Then
+                angleDiff = Abs((pi/2) - facePlane.Normal.AngleTo(testVec))
+                xVec = testVec
+            End If
+        Next
+    End If
+    yVec = facePlane.Normal.CrossProduct(xVec)
+    xVec = yVec.CrossProduct(facePlane.Normal)
+    
+    ' Obtener centroide real de la cara
+   ' Dim centroid As Point = selFace.GetClosestPointTo(ThisApplication.TransientGeometry.CreatePoint(30, 0, 0))
+    Dim centroid As Point = partDef.WorkPoints.AddAtCentroid(facePlane)
+    ' Crear plano fijo coplanar
+	'Dim baseWP As WorkPlane = partDef.WorkPlanes.AddByPlaneAndPoint(facePlane,centroid)
+    Dim baseWP As WorkPlane = partDef.WorkPlanes.AddFixed(centroid, xVec, yVec)
+    
+    ' Offset a 0 mm a partir del plano fijo
+   ' wp = partDef.WorkPlanes.AddByPlaneAndOffset(baseWP, 0)
+
+    ' Guardar el plano en SharedVariable para uso externo
+    SharedVariable("PlanoCreado") = wp
+End Sub

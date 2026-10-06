@@ -1,0 +1,34 @@
+﻿Sub Main()
+    ' Obtén el documento del dibujo activo
+    Dim oDrawingDoc As DrawingDocument = ThisApplication.ActiveDocument
+
+    ' Configurar el gestor de impresión (opcional)
+    Dim oPrintMgr As PrintManager = oDrawingDoc.PrintManager
+    oPrintMgr.ScaleMode = PrintScaleModeEnum.kPrintFullScale
+    oPrintMgr.Printer = "PDF-XChange Standard" ' Asegúrate de que el nombre de la impresora sea correcto
+oPrintMgr.Orientation = kPortraitOrientation
+    ' Itera sobre todas las hojas del dibujo
+    For Each oSheet As Sheet In oDrawingDoc.Sheets
+		'oSheet.Activate
+		Try
+		Dim sheetSizeName As String = oSheet.Border.Name
+        If sheetSizeName <> "Plantilla B3 ext-DB Final 1.2" Then
+            oSheet.ExcludeFromPrinting= True
+        End If
+		Catch
+			oSheet.ExcludeFromPrinting= True
+	End Try
+    Next
+	    oPrintMgr.PaperSize = kPaperSizeCustom
+    oPrintMgr.PaperHeight = 35.5
+    oPrintMgr.PaperWidth = 71.1
+        ' Crear un nuevo rango de impresión
+        oPrintMgr.PrintRange = kPrintAllSheets
+
+        ' Imprimir la hoja actual
+        oPrintMgr.SubmitPrint()
+
+    For Each oSheet As Sheet In oDrawingDoc.Sheets
+            oSheet.ExcludeFromPrinting= False
+    Next
+End Sub

@@ -1,0 +1,101 @@
+﻿
+Sub Main()
+iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IAM\PropAsignaux.iLogicVb")
+
+' Obtener el ensamblaje activo
+Dim assemblyDoc As AssemblyDocument
+assemblyDoc = ThisApplication.ActiveDocument
+
+' Crear una lista para almacenar los nombres de los subensamblajes
+Dim subAssemblyNames As New List(Of String)
+' Analizar el ensamblaje principal en busca de subensamblajes
+AnalyzeSubAssemblies(assemblyDoc.ComponentDefinition, subAssemblyNames, assemblyDoc)
+
+' Mostrar la cantidad de subensamblajes encontrados y sus nombres
+MsgBox("Se han asignado las propiedades correctamente", vbInformation, "Éxito")
+End Sub
+
+Sub AnalyzeSubAssemblies(compDef As ComponentDefinition, ByRef subAssemblyNames As List(Of String), parentDoc As Document)
+	' Obtener el número de parte del documento padre
+	Dim parentPartNumber As String = GetPartNumber(parentDoc)
+
+	' Iterar sobre las ocurrencias del ensamblaje actual
+	For Each oOcc As ComponentOccurrence In compDef.Occurrences
+		' Verificar si la ocurrencia está activa
+		If Not oOcc.Suppressed Then
+			If oOcc.DefinitionDocumentType = kPartDocumentObject Then
+				If oOcc.Definition.IsContentMember Then
+					Continue For
+				End If
+			End If
+
+			' Verificar si la ocurrencia es un subensamblaje
+			If oOcc.DefinitionDocumentType = kAssemblyDocumentObject Then
+				' Guardar el nombre del subensamblaje
+				subAssemblyNames.Add(oOcc.Name)
+
+				' Obtener el conjunto de definición del subensamblaje
+				Dim subAssemblyCompDef As AssemblyComponentDefinition
+				subAssemblyCompDef = oOcc.Definition
+
+				' Asignar la propiedad PADRE al subensamblaje
+				SetParentProperty(oOcc, parentPartNumber)
+
+				' Analizar el subensamblaje en busca de más subensamblajes
+				AnalyzeSubAssemblies(subAssemblyCompDef, subAssemblyNames, oOcc.Definition.Document)
+			Else
+				' Asignar la propiedad PADRE a la pieza
+				SetParentProperty(oOcc, parentPartNumber)
+			End If
+		End If
+	Next
+End Sub
+
+Sub SetParentProperty(elemento As ComponentOccurrence, parentPartNumber As String)
+	Dim customProps As PropertySet
+	Try
+		customProps = elemento.Definition.Document.PropertySets.Item("Inventor User Defined Properties")
+	Catch ex As Exception
+		customProps = elemento.Definition.Document.PropertySets.Add("Inventor User Defined Properties")
+	End Try
+
+	' Crear o establecer el valor de la propiedad "PADRE"
+	Dim propPADRE As [Property]
+	propPADRE = GetOrCreateProperty(customProps, "PADRE")
+	propPADRE.Value = parentPartNumber
+
+	
+End Sub
+
+Function GetPartNumber(doc As Document) As String
+	Try
+		Dim standardProperties As PropertySet
+		standardProperties = doc.PropertySets.Item("Design Tracking Properties")
+		Dim partNumberProp As [Property]
+		partNumberProp = standardProperties.Item("Stock Number")
+
+		Dim originalString As String = partNumberProp.Value
+	'	MsgBox(originalString)
+		Dim lastDotPosition As Integer = originalString.LastIndexOf(".")
+		Dim resultString As String
+		If lastDotPosition > -1 And originalString.EndsWith("00") Then
+			resultString = originalString.Substring(0, lastDotPosition)
+		Else
+			resultString = originalString
+		End If
+		'MsgBox(resultString)
+		Return resultString
+	Catch ex As Exception
+		Return "Unknown"
+	End Try
+End Function
+
+Function GetOrCreateProperty(props As Inventor.PropertySet, propName As String) As Inventor.Property
+	Dim prop As Inventor.Property
+	For Each prop In props
+		If prop.Name = propName Then
+			Return prop ' Devolver la propiedad existente
+		End If
+	Next
+	Return props.Add(" ", propName) ' Crear la propiedad si no existe
+End Function

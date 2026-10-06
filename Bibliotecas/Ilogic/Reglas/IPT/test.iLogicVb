@@ -1,0 +1,50 @@
+﻿iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IPT\Plano.iLogicVb")
+oWhatToRun = SharedVariable("oWhatToRun")
+oListUnits=SharedVariable("oListUnits")
+oDoc=SharedVariable("oDoc")
+Plano=SharedVariable ("Plano")
+
+Dim oDocPD As PartComponentDefinition = oDoc.ComponentDefinition
+Dim oPlane As WorkPlane = oDocPD.WorkPlanes.Item(2)
+oPlane= Plano
+ 
+     'Obtener el plano de trabajo de la pieza activa en el ensamblaje
+' Después de que la regla falle
+
+' Volver a ejecutar la regla
+
+    'oPlane = ThisApplication.CommandManager.Pick(kWorkPlaneFilter, "Seleccione plano de aplicación") 
+Dim oFeatures As PartFeatures = oDocPD.Features
+Dim numeroStr As String
+Dim opcionSeleccionada As String = oListUnits' Obtener la opción seleccionada
+Dim inicio As Integer = opcionSeleccionada.IndexOf("("c) ' Obtener la posición del primer paréntesis
+If inicio > 0 Then
+Dim fin As Integer = opcionSeleccionada.IndexOf(")") ' Obtener la posición de ")"
+Dim longitud As Integer = fin - inicio - 1 ' Calcular la longitud del número entre paréntesis
+numeroStr = opcionSeleccionada.Substring(inicio + 1, longitud) ' Obtener el número como cadena
+Else 
+	numeroStr=oListUnits
+End If
+ 'Create an iFeatureDefinition Object.
+Dim oiFeatureDef As iFeatureDefinition
+oiFeatureDef = oFeatures.iFeatures.CreateiFeatureDefinition("C:\Users\Public\Documents\Autodesk\Inventor 2023\Catalog\custom\MACIZO " & oWhatToRun &  ".ide")
+       ' Set the input.
+    Dim oInput As iFeatureInput
+    For Each oInput In oiFeatureDef.iFeatureInputs
+        Dim oParamInput As iFeatureParameterInput
+        Select Case oInput.Name
+			Case "Plano de base"
+                Dim oPlaneInput As iFeatureSketchPlaneInput
+                 oPlaneInput = oInput
+					oPlaneInput.PlaneInput = oPlane
+
+				 
+           Case "Dimension"
+                oParamInput = oInput
+                oParamInput.Expression = numeroStr
+        End Select
+    Next
+	 'Create the iFeature.
+	 			
+				Dim oiFeature As iFeature = oFeatures.iFeatures.Add(oiFeatureDef)
+

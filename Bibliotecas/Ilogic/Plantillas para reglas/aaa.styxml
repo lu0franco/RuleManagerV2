@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<Export>
+
+  <!--Exported by Autodesk Inventor Version 27.4 Production Candidate-->
+
+  <!--The schema of this file is subject to change without notice and is not guaranteed to remain the same from one release to the next.-->
+
+  <SheetMetalUnfold Version="3">
+    <Style EditFlag="3" InternalName="1:Default_KFactor&#xA;" KFactor="0.440 ul" KFactorBackup="0.440 ul" SplineFactor="0.500 ul" Type="1">
+      <BendTable AngleTolerance="0.004" InputUnit="3" IsOuterAngle="0" RadiiTolerance="0.004" ThicknessTolerance="4e-05"/>
+      <Name Description="" Language="3082">FactorK_Pordefecto</Name>
+    </Style>
+  </SheetMetalUnfold>
+
+  <SheetMetalRules Version="4">
+    <Style BendAngleRepType="2" BendRadius="#Thickness#" BendReliefType="2" BendTransitionType="5" EditFlag="3" GapSize="#Thickness#" InternalName="1:3/16&quot; (4.76mm)&#xA;" MinimumRemnant="#Thickness# * 2.0 ul" PunchRepStatus="1" ReliefDepth="#Thickness# * 0.5 ul" ReliefWidth="#Thickness#" Thickness="4.76" ThreeBendIntersectionSize="#BendRadius#" ThreeBendIntersectionType="1" TransitionRadius="#BendRadius#" TwoBendIntersectionSize="#Thickness# * 4 ul" TwoBendIntersectionType="4">
+      <SubStyle Collection="SheetMetalUnfold" Language="3082" Type="UnfoldStyle">FactorK_Pordefecto</SubStyle>
+      <SubStyle Type="MaterialStyle"/>
+      <Name Description="" Language="3082">3/16" (4.76mm)</Name>
+    </Style>
+  </SheetMetalRules>
+
+</Export>

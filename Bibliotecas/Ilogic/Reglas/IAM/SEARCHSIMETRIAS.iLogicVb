@@ -1,0 +1,195 @@
+﻿Sub Main()
+    Dim asmDoc As AssemblyDocument = ThisApplication.ActiveDocument
+    Dim simetricas As New List(Of String)
+    Dim listaSimetricas As New List(Of ComponentOccurrence)
+
+    ' --- Detectar ocurrencias simétricas ---
+    For Each occ As ComponentOccurrence In asmDoc.ComponentDefinition.Occurrences
+        If occ.Suppressed Then Continue For
+        If occ.BOMStructure = BOMStructureEnum.kReferenceBOMStructure Then Continue For
+
+        ' Saltar miembros de contenido estándar
+        If (occ.DefinitionDocumentType = DocumentTypeEnum.kPartDocumentObject AndAlso occ.Definition.IsContentMember) Then
+            Continue For
+        End If
+
+        Dim isMirror As Boolean = False
+        Dim pn As String = ""
+
+        ' 1) Por patrón espejo
+        If Not occ.PatternElement Is Nothing Then
+            Try
+                If occ.PatternElement.Components.Type = kMirrorPatternType Then
+                    isMirror = True
+                End If
+            Catch
+                ' Ignorar si no se puede leer
+            End Try
+        End If
+
+        ' 2) Por PN que contenga "MIR"
+        If Not isMirror Then
+            Try
+                Dim stdProps As PropertySet = occ.Definition.Document.PropertySets.Item("Design Tracking Properties")
+                pn = stdProps.Item("Part Number").Value.ToString()
+                If pn.ToUpper().Contains("MIR") Then isMirror = True
+            Catch
+                ' sin PN, seguimos
+            End Try
+        End If
+
+        If isMirror Then
+            simetricas.Add(occ.Name & " - es parte de una simetría")
+            listaSimetricas.Add(occ)
+        End If
+    Next
+
+    ' --- Procesar: asignar DESC=SIMETRIA y copiar PN original ---
+    Dim procesados As New Dictionary(Of String, Boolean)
+
+    For Each occ As ComponentOccurrence In listaSimetricas
+        Dim doc As Document = occ.Definition.Document
+        Dim keyDoc As String = GetDocKey(doc)
+
+        If procesados.ContainsKey(keyDoc) Then Continue For
+
+        ' Marcar descripción
+        Try
+            Dim stdProps As PropertySet = doc.PropertySets.Item("Design Tracking Properties")
+            stdProps.Item("Description").Value = "SIMETRIA"
+        Catch
+            ' Si no se puede escribir, seguir
+        End Try
+
+        ' Obtener PN original y escribirlo si lo conseguimos
+        Dim originalPN As String = GetOriginalPartNumberFromOccurrence(occ)
+        If originalPN <> "" Then
+            Try
+                Dim stdProps As PropertySet = doc.PropertySets.Item("Design Tracking Properties")
+                stdProps.Item("Part Number").Value = originalPN
+            Catch
+            End Try
+        End If
+
+        procesados(keyDoc) = True
+    Next
+
+    ' --- Mensaje final ---
+    If simetricas.Count > 0 Then
+        MsgBox("Se detectaron las siguientes piezas/ensamblajes como simetrías:" & vbCrLf &
+               String.Join(vbCrLf, simetricas), vbInformation, "Simetrías detectadas")
+    Else
+        MsgBox("No se detectaron piezas o ensamblajes con simetría de ensamblaje", vbInformation, "Simetrías")
+    End If
+End Sub
+
+'================== HELPERS ==================
+
+Function GetOriginalPartNumberFromOccurrence(occ As ComponentOccurrence) As String
+    Dim doc As Document = occ.Definition.Document
+    Dim pnActual As String = GetSafePN(doc)
+
+    ' --- PIEZA: intentar derivado de pieza ---
+    If occ.DefinitionDocumentType = DocumentTypeEnum.kPartDocumentObject Then
+        Try
+            Dim pDoc As PartDocument = CType(doc, PartDocument)
+            Dim refComps As ReferenceComponents = pDoc.ComponentDefinition.ReferenceComponents
+
+            If Not refComps Is Nothing AndAlso refComps.DerivedPartComponents.Count > 0 Then
+                ' Tomar el primero válido
+                For i As Integer = 1 To refComps.DerivedPartComponents.Count
+                    Try
+                        Dim dpc As DerivedPartComponent = refComps.DerivedPartComponents.Item(i)
+                        Dim origDoc As Document = dpc.ReferencedDocumentDescriptor.ReferencedDocument
+                        Dim pn As String = GetSafePN(origDoc)
+                        If pn <> "" Then Return pn
+                    Catch
+                    End Try
+                Next
+            End If
+        Catch
+            ' Si no podemos castear o acceder, seguimos
+        End Try
+    End If
+
+    ' --- ENSAMBLE: intentar derivado de ensamblaje ---
+    If occ.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
+        Try
+            Dim aDoc As AssemblyDocument = CType(doc, AssemblyDocument)
+            Dim refCompsAsm As ReferenceComponents = aDoc.ComponentDefinition.ReferenceComponents
+
+            ' Algunos entornos no exponen Derivados de Ensamblaje; probamos y si no, saltamos
+            Try
+                ' Si existe la colección, iterarla
+                If Not refCompsAsm Is Nothing AndAlso refCompsAsm.DerivedAssemblyComponents.Count > 0 Then
+                    For i As Integer = 1 To refCompsAsm.DerivedAssemblyComponents.Count
+                        Try
+                            Dim dac As DerivedAssemblyComponent = refCompsAsm.DerivedAssemblyComponents.Item(i)
+                            Dim origDoc As Document = dac.ReferencedDocumentDescriptor.ReferencedDocument
+                            Dim pn As String = GetSafePN(origDoc)
+                            If pn <> "" Then Return pn
+                        Catch
+                        End Try
+                    Next
+                End If
+            Catch
+                ' Si no existe la colección en esta versión, pasamos al fallback
+            End Try
+        Catch
+        End Try
+    End If
+
+    ' --- Fallback general: mirar ReferencedDocuments (cualquiera que no sea "MIR") ---
+    Try
+        If doc.ReferencedDocuments.Count > 0 Then
+            Dim candidato As String = ""
+            For Each r As Document In doc.ReferencedDocuments
+                Dim pnRef As String = GetSafePN(r)
+                If pnRef <> "" Then
+                    If Not pnRef.ToUpper().Contains("MIR") Then
+                        Return pnRef ' preferimos uno sin MIR
+                    End If
+                    If candidato = "" Then candidato = pnRef ' por si no hay otro mejor
+                End If
+            Next
+            If candidato <> "" Then Return candidato
+        End If
+    Catch
+    End Try
+
+    ' --- Último recurso: quitar "MIR" del PN actual ---
+    If pnActual <> "" Then
+        Return StripMIR(pnActual)
+    End If
+
+    Return ""
+End Function
+
+Function GetSafePN(d As Document) As String
+    Try
+        Return d.PropertySets.Item("Design Tracking Properties").Item("Part Number").Value.ToString()
+    Catch
+        Return ""
+    End Try
+End Function
+
+Function GetDocKey(d As Document) As String
+    Try
+        Return d.FullDocumentName
+    Catch
+        Try
+            Return d.DisplayName
+        Catch
+            Return Guid.NewGuid().ToString()
+        End Try
+    End Try
+End Function
+
+Function StripMIR(s As String) As String
+    Dim t As String = s
+    t = t.Replace("_MIR", "")
+    t = t.Replace("-MIR", "")
+    t = t.Replace(" MIR", "")
+    t = t.Replace("MIR", "")
+    Return Trim(t)
+End Function

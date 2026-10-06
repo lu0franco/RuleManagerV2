@@ -1,0 +1,109 @@
+﻿' Declarar las variables necesarias
+Sub Main()
+Dim WordApp As Object
+Dim WordDoc As Object
+Dim ensamblaje As AssemblyDocument
+
+
+ensamblaje = ThisApplication.ActiveDocument
+Dim descripcion As String
+Dim Cliente As String
+standardProperties = ensamblaje.PropertySets.Item("Design Tracking Properties")
+descripcion = standardProperties.Item("Project").Value
+Cliente = standardProperties.Item("Vendor").Value
+If descripcion = "" Then
+	MsgBox("No se ha asignado OT en Propiedades, inserte la OT antes de continuar", vbExclamation)
+Exit Sub
+End If
+If Cliente = "" Then
+	MsgBox("No se ha asignado Cliente en Propiedades, inserte el Cliente antes de continuar", vbExclamation)
+Exit Sub
+End If
+	
+		Dim rutaProyecto As String
+    rutaProyecto = System.IO.Path.GetDirectoryName(ThisDoc.Path)
+	Dim folderName As String
+    carpeta = ("CARPETA " & descripcion)
+	Dim rutacarpeta As String
+    rutacarpeta = System.IO.Path.Combine(rutaProyecto, carpeta)
+	
+	If Not System.IO.Directory.Exists( rutacarpeta) Then
+    System.IO.Directory.CreateDirectory( rutacarpeta)
+    End If
+	Dim Cartel As String
+    Cartel = (descripcion & " Cartel.docx")
+		Dim Caratula As String
+    Caratula = (descripcion & " Caratula.docx")
+			Dim Lomo As String
+    Lomo = (descripcion & " Lomo.docx" )
+    Dim rutaarchivo As String
+
+' Obtener el ensamblaje activo
+
+
+' Crear una instancia de la aplicación de Word
+WordApp = CreateObject("Word.Application")
+
+' Abrir la plantilla de Word
+WordDoc = WordApp.Documents.Add("D:\Bibliotecas\Ilogic\Plantillas para reglas\CARTEL_PROYECTO.dotx")
+
+' Llenar los campos de la plantilla con las propiedades del ensamblaje
+Dim str As String
+Dim nuevoStr As String
+
+' Asignar el string
+str = ensamblaje.PropertySets.Item("Design Tracking Properties").Item("Stock Number").Value
+
+' Cortar el string después de 5 caracteres desde el inicio
+nuevoStr = Left(str, 7)
+
+
+WordDoc.Bookmarks("MODELO").Range.Text = nuevoStr
+WordDoc.Bookmarks("EQUIPO").Range.Text = ensamblaje.PropertySets.Item("Design Tracking Properties").Item("Part Number").Value
+WordDoc.Bookmarks("OT").Range.Text = ensamblaje.PropertySets.Item("Design Tracking Properties").Item("Project").Value
+WordDoc.Bookmarks("CLIENTE").Range.Text = ensamblaje.PropertySets.Item("Design Tracking Properties").Item("Vendor").Value
+rutaarchivo = System.IO.Path.Combine(rutacarpeta, Cartel)
+' Guardar y cerrar el documento
+WordDoc.SaveAs2(rutaarchivo)
+WordDoc.Close()
+
+' Abrir la plantilla de Word
+WordDoc = WordApp.Documents.Add("D:\Bibliotecas\Ilogic\Plantillas para reglas\CARATULAS_CARPETAS.dotx")
+WordDoc.Bookmarks("MODELO").Range.Text = nuevoStr
+WordDoc.Bookmarks("EQUIPO").Range.Text = ensamblaje.PropertySets.Item("Design Tracking Properties").Item("Part Number").Value
+WordDoc.Bookmarks("OT").Range.Text = ensamblaje.PropertySets.Item("Design Tracking Properties").Item("Project").Value
+WordDoc.Bookmarks("CLIENTE").Range.Text = ensamblaje.PropertySets.Item("Design Tracking Properties").Item("Vendor").Value
+rutaarchivo = System.IO.Path.Combine(rutacarpeta, Caratula)
+' Guardar y cerrar el documento
+WordDoc.SaveAs2(rutaarchivo)
+WordDoc.Close()
+
+' Abrir la plantilla de Word
+WordDoc = WordApp.Documents.Add("D:\Bibliotecas\Ilogic\Plantillas para reglas\LOMO_CARPETAS.dotx")
+WordDoc.Bookmarks("MODELO").Range.Text = nuevoStr
+WordDoc.Bookmarks("EQUIPO").Range.Text = ensamblaje.PropertySets.Item("Design Tracking Properties").Item("Part Number").Value
+WordDoc.Bookmarks("OT").Range.Text = ensamblaje.PropertySets.Item("Design Tracking Properties").Item("Project").Value
+rutaarchivo = System.IO.Path.Combine(rutacarpeta, Lomo)
+' Guardar y cerrar el documento
+WordDoc.SaveAs2(rutaarchivo)
+
+
+' Salir de la aplicación de Word
+WordApp.Quit()
+
+' Liberar los objetos de Word de la memoria
+ReleaseObject(WordDoc)
+ReleaseObject(WordApp)
+MsgBox("Se han generado los elementos de la carpeta. búsquelos en la ruta del proyecto", , "Proceso terminado")
+End Sub
+' Función para liberar objetos de memoria
+Sub ReleaseObject(obj As Object)
+    Try
+        System.Runtime.InteropServices.Marshal.ReleaseComObject(obj)
+        obj = Nothing
+    Catch ex As Exception
+        obj = Nothing
+    Finally
+        GC.Collect()
+    End Try
+End Sub

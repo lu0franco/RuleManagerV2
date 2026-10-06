@@ -1,0 +1,92 @@
+﻿'=========================================================
+' ASIGNAR_COMERCIALES – lee TODAS las ocurrencias que
+' Highlighted haya metido en ListaIn / ListaOut
+'=========================================================
+Sub Main()
+    '1) Lanzar Highlighted
+    iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IAM\Higlighted.iLogicVb")
+
+    '2) Recuperar listas
+    Dim ListaIn  As List(Of ComponentOccurrence) = SharedVariable("ListaIn")
+    Dim ListaOut As List(Of ComponentOccurrence) = SharedVariable("ListaOut")
+    If ListaIn  Is Nothing Then ListaIn  = New List(Of ComponentOccurrence)()
+    If ListaOut Is Nothing Then ListaOut = New List(Of ComponentOccurrence)()
+
+    '3) Procesar
+    Dim yaProcesados As New Dictionary(Of String, Boolean) 'por archivo
+    For Each occ As ComponentOccurrence In ListaIn
+        If SkipIfContentCenter(occ) Then Continue For
+        Dim key As String = occ.Definition.Document.FullDocumentName
+        If Not yaProcesados.ContainsKey(key) Then
+            SetComValue(occ, "✓")
+            yaProcesados.Add(key, True)
+        End If
+    Next
+
+    yaProcesados.Clear()
+    For Each occ As ComponentOccurrence In ListaOut
+        If SkipIfContentCenter(occ) Then Continue For
+        Dim key As String = occ.Definition.Document.FullDocumentName
+        If Not yaProcesados.ContainsKey(key) Then
+            SetComValue(occ, "")
+            yaProcesados.Add(key, True)
+        End If
+    Next
+
+    '4) Refrescar
+    ThisApplication.ActiveDocument.Update()
+    ThisApplication.ActiveView.Update()
+    MsgBox("Asignación de COM finalizada" & vbCrLf &
+           "Procesados " & ListaIn.Count & " para ✓ y " &
+           ListaOut.Count & " para borrar.", vbInformation, "Listo")
+End Sub
+
+
+'---------------------------------------------------------
+' Saltea Content-Center
+'---------------------------------------------------------
+Function SkipIfContentCenter(occ As ComponentOccurrence) As Boolean
+    If occ.DefinitionDocumentType = kPartDocumentObject AndAlso _
+       occ.Definition.IsContentMember Then Return True
+    Return False
+End Function
+
+
+'---------------------------------------------------------
+' Escribe COM en el archivo de definición
+' Abre, guarda y cierra si lo abrió
+'---------------------------------------------------------
+Sub SetComValue(occ As ComponentOccurrence, valor As String)
+    Dim fileName As String = occ.Definition.Document.FullDocumentName
+    Dim doc As Document = Nothing
+    Dim fueAbiertoPorMi As Boolean = False
+
+    Try
+        doc = ThisApplication.Documents.ItemByName(fileName)
+    Catch
+        doc = ThisApplication.Documents.Open(fileName, False)
+        fueAbiertoPorMi = True
+    End Try
+
+    Dim oUserProps As PropertySet
+    Try
+        oUserProps = doc.PropertySets.Item("Inventor User Defined Properties")
+    Catch ex As Exception
+        oUserProps = doc.PropertySets.Add("Inventor User Defined Properties")
+    End Try
+
+    Dim propCOM As Inventor.Property = Nothing
+    For Each p As Inventor.Property In oUserProps
+        If p.Name = "COM" Then propCOM = p : Exit For
+    Next
+
+    If propCOM Is Nothing Then
+        oUserProps.Add(valor, "COM")
+    Else
+        propCOM.Value = valor
+    End If
+
+    doc.Update()
+    doc.Save()
+    If fueAbiertoPorMi Then doc.Close(True)
+End Sub

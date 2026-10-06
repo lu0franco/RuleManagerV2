@@ -1,0 +1,23 @@
+﻿Sub Main
+    Dim timer As New System.Timers.Timer(1000) ' Tiempo en milisegundos (1000 ms = 1 segundo)
+    AddHandler timer.Elapsed, AddressOf OnTimedEvent
+    timer.AutoReset = False ' Para que el temporizador no se reinicie automáticamente
+    timer.Start()
+End Sub
+
+Sub OnTimedEvent(sender As Object, e As System.Timers.ElapsedEventArgs)
+        MsgBox("Ha pasado un segundo")
+	' Tu código aquí para ejecutar después de un segundo
+    ' Por ejemplo:
+	'ThisApplication.CommandManager.StartCommand(CommandIDEnum.kFileSaveCommand)
+Plano = ThisApplication.CommandManager.Pick(kWorkPlaneFilter, "Seleccione plano de aplicación") 
+SharedVariable("Plano") = Plano
+
+End Sub
+
+
+
+
+'ThisApplication.CommandManager.StartCommand(CommandIDEnum.kFileSaveCommand)
+'Plano = ThisApplication.CommandManager.Pick(kWorkPlaneFilter, "Seleccione plano de aplicación") 
+'SharedVariable("Plano") = Plano

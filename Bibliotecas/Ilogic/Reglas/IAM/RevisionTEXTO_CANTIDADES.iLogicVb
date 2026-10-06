@@ -1,0 +1,101 @@
+﻿Sub Main()
+
+    If ThisApplication.ActiveDocument.DocumentType <> kAssemblyDocumentObject Then
+        MsgBox("Abrí un ensamblaje.", vbExclamation)
+        Exit Sub
+    End If
+
+    Dim asmDoc As AssemblyDocument
+    asmDoc = ThisApplication.ActiveDocument
+
+    Dim procesados As New Dictionary(Of String, Boolean)
+
+    RevisarOcurrencias(asmDoc.ComponentDefinition.Occurrences, procesados)
+
+    MsgBox("TEXTO_CANTIDADES verificado.", vbInformation)
+
+End Sub
+
+
+Sub RevisarOcurrencias(oOccs As ComponentOccurrences,
+                       ByRef procesados As Dictionary(Of String, Boolean))
+
+    For Each oOcc As ComponentOccurrence In oOccs
+
+        If oOcc.Suppressed Then Continue For
+If Not oOcc.Visible  Then
+				'MsgBox(oOcc.Name & "No se analizará por estar oculta")
+				Continue For
+			End If
+        Try
+
+            Dim doc As Document = oOcc.Definition.Document
+
+            If Not procesados.ContainsKey(doc.FullFileName) Then
+
+                procesados.Add(doc.FullFileName, True)
+
+                ActualizarTextoCantidades(doc)
+
+            End If
+
+        Catch
+        End Try
+
+        If oOcc.SubOccurrences.Count > 0 Then
+            RevisarOcurrencias(oOcc.SubOccurrences, procesados)
+        End If
+
+    Next
+
+End Sub
+
+
+Sub ActualizarTextoCantidades(doc As Document)
+
+    Try
+
+        Dim userProps As PropertySet
+        userProps = doc.PropertySets("Inventor User Defined Properties")
+
+        Dim cantDer As Integer = 0
+        Dim cantIzq As Integer = 0
+
+        Try
+            cantDer = CInt(GetOrCreateProperty(userProps, "CANTIDAD_DERECHA").Value)
+        Catch
+        End Try
+
+        Try
+            cantIzq = CInt(GetOrCreateProperty(userProps, "CANTIDAD_IZQUIERDA").Value)
+        Catch
+        End Try
+
+        ' SOLO crear/escribir si existen ambas
+        If cantDer > 0 And cantIzq > 0 Then
+
+            GetOrCreateProperty(userProps, "TEXTO_CANTIDADES").Value = _
+            "=" & cantDer & " DER.  " & cantIzq & " IZQ."
+
+        End If
+
+    Catch
+    End Try
+
+End Sub
+
+
+Function GetOrCreateProperty(props As PropertySet,
+                             propName As String) As [Property]
+
+    For Each prop As [Property] In props
+
+        If prop.Name = propName Then
+            Return prop
+        End If
+
+    Next
+
+    Return props.Add("", propName)
+
+End Function

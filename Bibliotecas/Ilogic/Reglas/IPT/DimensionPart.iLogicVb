@@ -1,0 +1,23 @@
+﻿Sub Main()
+    ' Obtener el documento de la pieza activa
+    Dim documentoPieza As PartDocument
+    documentoPieza = ThisApplication.ActiveDocument
+
+    ' Obtener la caja delimitadora que engloba todos los cuerpos de la pieza
+    Dim cajaDelimitadora As Box
+    cajaDelimitadora = documentoPieza.ComponentDefinition.RangeBox
+
+    ' Obtener las dimensiones de la caja delimitadora
+    Dim ancho As Double
+    Dim alto As Double
+    Dim profundo As Double
+    ancho = (cajaDelimitadora.MaxPoint.X - cajaDelimitadora.MinPoint.X)*10
+    alto = (cajaDelimitadora.MaxPoint.Y - cajaDelimitadora.MinPoint.Y)*10
+    profundo = (cajaDelimitadora.MaxPoint.Z - cajaDelimitadora.MinPoint.Z) * 10
+	
+	SharedVariable("ancho") = ancho
+	SharedVariable("alto") = alto
+	SharedVariable("profundo") = profundo
+    ' Mostrar las medidas
+   ' MsgBox ("Ancho: " & ancho & vbCrLf & "Alto: " & alto & vbCrLf & "Profundo: " & profundo)
+End Sub

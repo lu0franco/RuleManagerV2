@@ -1,0 +1,278 @@
+﻿Imports System.IO
+Imports Microsoft.Office.Interop.Excel
+Sub Main()
+Dim oDrawDoc As DrawingDocument = ThisApplication.ActiveDocument
+' Verificar si el documento activo es un dibujo
+If oDrawDoc.DocumentType = DocumentTypeEnum.kDrawingDocumentObject Then
+	' Llamar a la función para seleccionar la hoja y la vista
+	Dim selectedView As DrawingView = SelectDrawingView(oDrawDoc)
+
+	If Not selectedView Is Nothing Then
+		' Llamar a la función para crear un nuevo dibujo con la vista seleccionada
+		CreateNewDrawingWithView(selectedView, oDrawDoc)
+	Else
+		MsgBox("No se seleccionó ninguna vista.", vbExclamation, "Error")
+	End If
+Else
+	MsgBox("El documento activo no es un dibujo.", vbExclamation, "Error")
+End If
+'________________________________________________________________________________________________________________
+Dim oDDoc As DrawingDocument = ThisApplication.ActiveDocument
+Dim partsDataout As New List(Of Dictionary(Of String, String))
+For Each ooPartsList As PartsList In oDrawDoc.ActiveSheet.PartsLists
+	If ooPartsList.Style is oDrawDoc.StylesManager.PartsListStyles.Item("BULLDM") Then
+		Dim oPartsList As PartsList = ooPartsList
+		Dim cont As Integer = 0
+		Dim oRows As PartsListRows = oPartsList.PartsListRows
+		' Recorrer las filas de la tabla de piezas
+		For i As Integer = 1 To oPartsList.PartsListRows.Count
+			Dim oRow As PartsListRow = oPartsList.PartsListRows.Item(i)
+			' Recorrer las columnas y extraer los datos
+			'For Each oRow In oRows
+			If oRow.Item(3).Value.Contains("✓") Then
+				oRow.Visible = False
+			End If
+		Next
+		' Recorrer las filas de la tabla de piezas
+		For i As Integer = 1 To oPartsList.PartsListRows.Count
+			Dim row As PartsListRow = oPartsList.PartsListRows.Item(i)
+			Dim partInfoout As New Dictionary(Of String, String)
+			'		Dim parts() As String = Split(hoja.Name, " ")
+			'		' Acceder a las partes individuales
+			'		Dim plano As String = parts(0) ' Resultado: "Hola"
+			'		plano = plano.Replace("_", "/")
+			For j As Integer = 1 To oPartsList.PartsListColumns.Count
+				Dim column As PartsListColumn = oPartsList.PartsListColumns.Item(j)
+				'MsgBox(column)
+				Dim cellText As String = row.Item(j).Value
+				'MsgBox(cellText)
+				' Usar el nombre de la columna como clave para el diccionario
+				partInfoout(column.Title) = cellText
+			Next
+			' Verificar si "DETALLE / MATERIAL" está presente y si contiene "D-145"
+			If partInfoout.ContainsKey("BULONERIA") AndAlso partInfoout("BULONERIA").Contains("✓") Then
+				' Si "DETALLE / MATERIAL" contiene "D-145", ignorar este registro
+				partInfoout("PRODUCTO") = partInfoout("DESCRIPCION")
+				partInfoout.Remove("DESCRIPCION")
+				' Agregar la información de la fila a la lista
+				partsDataout.Add(partInfoout)
+			End If
+		Next
+		oPartsList.Delete()
+		'________________________________________________________________________________________________________________
+
+		' Mostrar los datos extraídos (por ejemplo, en una ventana de mensaje)
+		'		Dim result As String = "datos: " & vbCrLf
+		'		For Each partInfoout In partsDataout
+		'			For Each key As String In partInfoout.Keys
+		'				result &= key & ": " & partInfoout(key) & vbCrLf
+		'			Next
+		'			result &= vbCrLf
+		'		Next
+		'		MessageBox.Show(result)
+		Logger.Debug(result)
+	End If
+Next
+':::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+' Obtener el documento de dibujo activo
+Dim oDoc As DrawingDocument = ThisApplication.ActiveDocument
+Dim projectPath As String = System.IO.Path.GetDirectoryName(ThisDoc.WorkspacePath) ' Obtener la ruta del archivo de dibujo activo
+Dim standardProperties As PropertySet = oDoc.PropertySets.Item("Design Tracking Properties")
+Dim OT As String = standardProperties.Item("Project").Value
+Dim Cliente As String = standardProperties.Item("Vendor").Value
+Dim Equipo As String = standardProperties.Item("Part Number").Value
+Dim Modelo As String = standardProperties.Item("Stock Number").Value
+If OT = "" Then
+	MsgBox("No se ha asignado OT en Propiedades, inserte la OT antes de continuar", vbExclamation)
+	Exit Sub
+End If
+'If Cliente = "" Then
+'	MsgBox("No se ha asignado Cliente en Propiedades, inserte el Cliente antes de continuar", vbExclamation)
+'	Exit Sub
+'End If
+
+' Crear listas para separar los elementos
+Dim BULList As New List(Of Dictionary(Of String, String))()
+
+' Separar los elementos según el valor de las claves
+For Each item As Dictionary(Of String, String) In partsDataout
+	If item.ContainsKey("BULONERIA") AndAlso Item("BULONERIA") = "✓" Then
+		BULList.Add(item)
+	End If
+Next
+    ' Ordenar MCList por la clave "PRODUCTO"
+    BULList.Sort(Function(x, y) String.Compare(x("PRODUCTO"), y("PRODUCTO")))
+' Crear una nueva instancia de Excel y abrir el archivo existente
+Dim excelApp As Object = CreateObject("Excel.Application")
+Dim filePath As String = "D:\Bibliotecas\Ilogic\Plantillas para reglas\REQUERIMIENTO DE MATERIALESV5.xlsx" ' Ruta del archivo de plantilla
+' Crear la nueva carpeta dentro de la carpeta del proyecto
+Dim newFolderPath As String = System.IO.Path.Combine(projectPath, ThisDoc.Path, OT & " LDM")
+If Not Directory.Exists(newFolderPath) Then
+	Directory.CreateDirectory(newFolderPath)
+End If
+Dim rutaLDM As String = System.IO.Path.Combine(newFolderPath, OT & " LDM.xlsx")
+Dim excelWorkbook As Object = excelApp.Workbooks.Open(rutaLDM)
+
+' Escribir cada lista en una hoja separada
+WriteDictListToSheet("R.BULONERIA", BULList, excelWorkbook, OT, Modelo, Equipo, Cliente)
+
+    ' Desactivar las alertas de confirmación
+    excelApp.DisplayAlerts = False
+
+' Guardar y cerrar el archivo de Excel
+excelWorkbook.SaveAs(rutaLDM)
+    excelApp.DisplayAlerts = True
+excelWorkbook.Close()
+excelApp.Quit()
+
+' Liberar los objetos de Excel
+System.Runtime.InteropServices.Marshal.ReleaseComObject(excelWorkbook)
+System.Runtime.InteropServices.Marshal.ReleaseComObject(excelApp)
+excelWorkbook = Nothing
+excelApp = Nothing
+
+' Preguntar al usuario si desea abrir la lista de materiales
+Dim m As DialogResult
+m = MessageBox.Show("¿Desea abrir la Lista de materiales?", "Acciones", MessageBoxButtons.OKCancel, MessageBoxIcon.Asterisk, MessageBoxDefaultButton.Button1)
+Select Case m
+	Case DialogResult.OK
+		Dim xlver As Object
+		xlver = CreateObject("Excel.Application")
+		xlver.Visible = True
+		xlver.Workbooks.Open(rutaLDM)
+	Case DialogResult.Cancel
+End Select
+End Sub
+
+
+Sub WriteDictListToSheet(sheetName As String, dictList As List(Of Dictionary(Of String, String)), excelWorkbook As Object, OT As String, Modelo As String, Equipo As String, Cliente As String)
+	Dim headers As New List(Of String)
+	Select Case sheetName
+		Case "R.BULONERIA"
+			headers.AddRange({"CANT", "PRODUCTO" })
+	End Select
+
+	Dim excelSheet As Object = Nothing
+	Try
+		excelSheet = excelWorkbook.Sheets(sheetName)
+	Catch ex As Exception
+		MsgBox("La hoja " & sheetName & " no existe en el archivo de plantilla.")
+		Exit Sub
+	End Try
+
+	' Escribir los datos del diccionario en las filas subsiguientes a partir de la fila 9
+	Dim rowIndex As Integer = 9
+	For Each partInfo In dictList
+		Dim columnIndex As Integer = 1
+		For Each header As String In headers
+			If partInfo.ContainsKey(header) Then
+				excelSheet.Cells(rowIndex, columnIndex).Value = partInfo(header)
+			Else
+				excelSheet.Cells(rowIndex, columnIndex).Value = ""
+			End If
+			columnIndex += 1
+		Next
+		rowIndex += 1
+	Next
+
+	' Aplicar formato desde la celda A9
+	Dim formatRange As Object
+	formatRange = excelSheet.Range("A9:J9")
+	formatRange.Copy()
+
+	' Determinar la última fila en función de la longitud de la lista dictList
+	Dim lastRow As Integer = 8 + dictList.Count
+	excelSheet.Range("A9:J" & lastRow).PasteSpecial(-4122)
+
+	'    ' Ajustar automáticamente el ancho de las columnas
+	excelSheet.Columns("A:H").AutoFit()
+	'    excelSheet.Columns("C").AutoFit()
+	'    excelSheet.Columns("E").AutoFit()
+	'    excelSheet.Columns("G").AutoFit()
+	excelSheet.Rows("9:" & lastRow).RowHeight = 102
+
+	Dim searchValues(0 To 3) As String
+	Dim replaceValues(0 To 3) As String
+	searchValues = {"OT", "MODELO", "EQUIPO", "CLIENTE" }
+	replaceValues = {OT, "MODELO: " & Modelo, "EQUIPO: " & Equipo, "CLIENTE: " & Cliente }
+
+	' Buscar y reemplazar los valores en las celdas específicas
+	Dim cell As Object
+	For Each cell In excelSheet.UsedRange
+		For i = 0 To UBound(searchValues)
+			Dim Valorreemplazo As String = cell.Value
+			If Valorreemplazo = CStr(searchValues(i)) Then
+				cell.Value = replaceValues(i)
+			End If
+		Next i
+	Next cell
+
+
+End Sub
+
+':::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Function SelectDrawingView(oDrawDoc As DrawingDocument) As DrawingView
+
+	' Permitir al usuario seleccionar una hoja en el BrowserPane
+
+	Dim selectedView As DrawingView = Nothing
+
+	Dim selectedSheet As Sheet = ThisApplication.CommandManager.Pick(SelectionFilterEnum.kDrawingSheetFilter, "Seleccione una hoja")
+	selectedSheet.activate
+
+
+	If Not selectedSheet Is Nothing Then
+		' Permitir al usuario seleccionar una vista en la hoja
+		Dim oSelection As Object = ThisApplication.CommandManager.Pick(SelectionFilterEnum.kDrawingViewFilter, "Seleccione una vista para extraer LDM-Bulonería")
+
+		If Not oSelection Is Nothing Then
+			selectedView = oSelection
+		End If
+	End If
+
+	Return selectedView
+End Function
+
+Sub CreateNewDrawingWithView(selectedView As DrawingView, oDrawDoc As DrawingDocument)
+	' Crear un nuevo documento de dibujo
+	Dim oNewDrawDoc As DrawingDocument = ThisApplication.Documents.Add(DocumentTypeEnum.kDrawingDocumentObject, "D:\Bibliotecas\Plantillas\plantilla db\PLANOS DB.idw", False) ' true para activar nuevo dibujo
+	' Obtener el modelo del ensamblaje desde la vista seleccionada
+	Dim oModel As Document = selectedView.ReferencedDocumentDescriptor.ReferencedDocument
+
+	' Crear una nueva hoja en el nuevo dibujo
+	Dim oNewSheet As Sheet = oNewDrawDoc.Sheets.Item(1) ' Cambiar el índice según sea necesario
+	oNewSheet.Activate
+	' Añadir una vista del ensamblaje en la nueva hoja
+	Dim oTG As TransientGeometry = ThisApplication.TransientGeometry
+	Dim oViewPos As Point2d = oTG.CreatePoint2d(10, 10) ' Posición de la vista, modificar según sea necesario
+	Dim oNewView As DrawingView = oNewSheet.DrawingViews.AddBaseView(oModel, oViewPos, 0.15, ViewOrientationTypeEnum.kIsoTopRightViewOrientation, DrawingViewStyleEnum.kHiddenLineDrawingViewStyle)
+
+	Dim HOJA As Sheet = oNewDrawDoc.Sheets.Item(1) ' Cambiar el índice según sea necesario
+	Dim oPartsList As PartsList
+	On Error Resume Next
+	oPartsList = HOJA.PartsLists.Item(1)
+
+	If Err.Number <> 0 Then
+		Dim oView As DrawingView = HOJA.DrawingViews.Item(1)
+
+		Dim oBorder As Border = HOJA.Border
+		Dim oPoint As Point2d
+
+		If oBorder IsNot Nothing Then
+			' A border exists. The placement point is the top-right corner of the border.
+			oPoint = oBorder.RangeBox.MaxPoint
+		Else
+			' There is no border. The placement point is the top-right corner of the sheet.
+			oPoint = ThisApplication.TransientGeometry.CreatePoint2d(HOJA.Width, HOJA.Height)
+		End If
+
+		Dim oPListStyle As PartsListStyle = oNewDrawDoc.StylesManager.PartsListStyles.Item("BULLDM")
+		Dim oPList As PartsList = HOJA.PartsLists.Add(oView, oPoint, kPartsOnly)
+		oPList.Style = oPListStyle
+		oPList.CopyTo(oDrawDoc.ActiveSheet)
+		oNewDrawDoc.Close(True)
+	End If
+
+	'MsgBox("Nueva hoja y vista creadas exitosamente.", vbInformation, "Éxito")
+End Sub

@@ -1,0 +1,565 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Version>1</Version>
+  <Snippets>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Leer archivo CSV</Name>
+      <ToolTip>Lee el contenido de un archivo CSV delimitado por comas en una ArrayList</ToolTip>
+      <Index>1001</Index>
+      <Code><![CDATA[Dim ReadCSV As New System.IO.StreamReader(ThisDoc.Path & "\filename.csv")
+Dim WordSets As New ArrayList()
+
+Do While ReadCSV.Peek <> -1
+WordSets.Add(ReadCSV.ReadLine.Split(","))
+Loop
+
+getvalue = WordSets.item(0)(0)
+messagebox.show(getvalue)
+
+'csv file looks like this:
+'test0,00,000
+'test1,100,1000
+'test2,200,2000
+
+]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Exportar parámetros a CSV</Name>
+      <ToolTip>Exporta los nombres de parámetros y sus valores a un
+archivo CSV delimitado por comas.</ToolTip>
+      <Index>1002</Index>
+      <Code><![CDATA['Output parameters names and values to a comma delimited CSV file
+
+fileheader = "Parameters Report for " & ThisDoc.PathAndFileName(True) 'first line header of csv file
+description = "Main Parameters and their values" 'use this variable in the body of the html
+TableMembers = New String () {"d0", "d1", "d2"} 'parameters (names) to include in table
+delimiter = "," 'character to separate the names and values on each line
+
+'CSV filename uses this documents path and filename with a .csv extention
+Dim oFile as System.IO.File
+Dim oWrite as System.IO.StreamWriter
+csv_filename = ThisDoc.PathAndFileName(False) & ".csv"
+
+oWrite = oFile.CreateText(csv_filename) 'name and path of csv file to create/overwrite
+oWrite.WriteLine(fileheader) 'include the fileheader on the first line
+oWrite.WriteLine(description) 'include the description on the second line
+oWrite.WriteLine(NOW()) 'include the current date and time on the third line
+oWrite.WriteLine() 'blank line
+
+'write the parameter name , value for each parameter in the TableMembers Arraylist
+For Each pName as String in TableMembers
+oWrite.WriteLine(pName & delimiter & Parameter(pName)) 
+Next
+
+oWrite.Close()
+
+'option to view report
+go = MessageBox.Show("Would you like to view the csv file?", "iLogic CSV Output", MessageBoxButtons.YesNo)
+if go = 6 then ThisDoc.Launch(csv_filename)]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Publicar DWF 3D</Name>
+      <ToolTip>Publica un archivo DWF 3D del documento que contiene esta regla.
+El nombre de archivo y la ruta hacen coincidir el documento de regla con la extensión .dwf</ToolTip>
+      <Index>1003</Index>
+      <Code><![CDATA[i = MessageBox.Show("Launch the viewer now?", "Title",MessageBoxButtons.YesNo)
+if i = vbYes then : launchviewer = 1 : else : launchviewer = 0 : end if
+
+path_and_name = ThisDoc.PathAndFileName(False) ' without extension
+DWFAddIn = ThisApplication.ApplicationAddIns.ItemById("{0AC6FD95-2F4D-42CE-8BE0-8AEA580399E4}")
+oDocument = ThisApplication.ActiveDocument
+oContext = ThisApplication.TransientObjects.CreateTranslationContext
+oContext.Type = IOMechanismEnum.kFileBrowseIOMechanism
+oOptions = ThisApplication.TransientObjects.CreateNameValueMap
+oDataMedium = ThisApplication.TransientObjects.CreateDataMedium
+
+If DWFAddIn.HasSaveCopyAsOptions(oDocument, oContext, oOptions) Then
+oOptions.Value("Launch_Viewer") = launchviewer
+oOptions.Value("Publish_All_Component_Props") = 1
+oOptions.Value("Publish_All_Physical_Props") = 1
+oOptions.Value("Password") = 0
+End If
+
+'Set the destination file name
+oDataMedium.FileName = path_and_name & ".dwf"
+
+'Publish document.
+Call DWFAddIn.SaveCopyAs(oDocument, oContext, oOptions, oDataMedium)
+if launchviewer = 1 then ThisDoc.Launch(path_and_name & ".dwf")]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Publicar DWF 2D</Name>
+      <ToolTip>Publica un archivo DWF de todas las hojas del documento de dibujo actual.
+El modelo 3D no se incluye.</ToolTip>
+      <Index>1004</Index>
+      <Code><![CDATA['this rule outputs all drawing sheets to dwf, 3D models not included
+path_and_name = ThisDoc.PathAndFileName(False)
+DWFAddIn = ThisApplication.ApplicationAddIns.ItemById("{0AC6FD95-2F4D-42CE-8BE0-8AEA580399E4}")
+oDocument = ThisApplication.ActiveDocument
+oContext = ThisApplication.TransientObjects.CreateTranslationContext
+oContext.Type = IOMechanismEnum.kFileBrowseIOMechanism
+oOptions = ThisApplication.TransientObjects.CreateNameValueMap
+oDataMedium = ThisApplication.TransientObjects.CreateDataMedium
+
+i = MessageBox.Show("Launch the viewer now?", "Title",MessageBoxButtons.YesNo)
+if i = vbYes then : launchviewer = 1 : else : launchviewer = 0 : end if 
+
+If DWFAddIn.HasSaveCopyAsOptions(oDocument, oContext, oOptions) Then
+oOptions.Value("Launch_Viewer") = launchviewer
+oOptions.Value("Publish_All_Component_Props") = 1
+oOptions.Value("Publish_All_Physical_Props") = 1
+oOptions.Value("Password") = 0
+If TypeOf oDocument Is DrawingDocument Then
+oOptions.Value("Publish_Mode") = DWFPublishModeEnum.kCustomDWFPublish
+oOptions.Value("Publish_All_Sheets") = 1
+End If
+End If
+
+oDataMedium.FileName = path_and_name & "_2D.dwf"
+Call DWFAddIn.SaveCopyAs(oDocument, oContext, oOptions, oDataMedium)
+if launchviewer = 1 then ThisDoc.Launch(path_and_name & "_2D.dwf")]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Publicar DWF 2D y 3D</Name>
+      <ToolTip>Publica un archivo DWF de todas las hojas del documento de dibujo actual.
+El modelo 3D se incluye para Sheet:1
+Este fragmento se utiliza en una regla de dibujo.</ToolTip>
+      <Index>1005</Index>
+      <Code><![CDATA['this rule outputs all drawing sheets to dwf, 3D models of first sheet included
+path_and_name = ThisDoc.PathAndFileName(False)
+DWFAddIn = ThisApplication.ApplicationAddIns.ItemById("{0AC6FD95-2F4D-42CE-8BE0-8AEA580399E4}")
+oDocument = ThisApplication.ActiveDocument
+oContext = ThisApplication.TransientObjects.CreateTranslationContext
+oContext.Type = IOMechanismEnum.kFileBrowseIOMechanism
+oOptions = ThisApplication.TransientObjects.CreateNameValueMap
+oDataMedium = ThisApplication.TransientObjects.CreateDataMedium
+
+i = MessageBox.Show("Launch the viewer now?", "Title",MessageBoxButtons.YesNo)
+if i = vbYes then : launchviewer = 1 : else : launchviewer = 0 : end if 
+
+If DWFAddIn.HasSaveCopyAsOptions(oDocument, oContext, oOptions) Then
+oOptions.Value("Launch_Viewer") = launchviewer
+oOptions.Value("Publish_All_Component_Props") = 1
+oOptions.Value("Publish_All_Physical_Props") = 1
+oOptions.Value("Password") = 0
+If TypeOf oDocument Is DrawingDocument Then
+Dim oSheets As NameValueMap
+oSheets = ThisApplication.TransientObjects.CreateNameValueMap
+oOptions.Value("Publish_Mode") = DWFPublishModeEnum.kCustomDWFPublish
+oOptions.Value("Publish_All_Sheets") = 1
+' Publish the first sheet AND its 3D model
+Dim oSheet1Options As NameValueMap
+oSheet1Options = ThisApplication.TransientObjects.CreateNameValueMap
+oSheet1Options.Add("Name", "Sheet:1")
+oSheet1Options.Add("3DModel", True)
+oSheets.Value("Sheet1") = oSheet1Options
+end If
+End If
+
+oDataMedium.FileName = path_and_name & ".dwf"
+Call DWFAddIn.SaveCopyAs(oDocument, oContext, oOptions, oDataMedium)
+if launchviewer = 1 then ThisDoc.Launch(path_and_name & ".dwf")]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Exportar DXF de IDW</Name>
+      <ToolTip>Exporta un archivo DXF desde un documento de dibujo de Inventor (.idw)</ToolTip>
+      <Index>1006</Index>
+      <Code><![CDATA[' Get the DXF translator Add-In.
+Dim DXFAddIn As TranslatorAddIn
+DXFAddIn = ThisApplication.ApplicationAddIns.ItemById("{C24E3AC4-122E-11D5-8E91-0010B541CD80}")
+'Set a reference to the active document (the document to be published).
+Dim oDocument As Document
+oDocument = ThisApplication.ActiveDocument
+Dim oContext As TranslationContext
+oContext = ThisApplication.TransientObjects.CreateTranslationContext
+oContext.Type = IOMechanismEnum.kFileBrowseIOMechanism
+' Create a NameValueMap object
+Dim oOptions As NameValueMap
+oOptions = ThisApplication.TransientObjects.CreateNameValueMap
+' Create a DataMedium object
+Dim oDataMedium As DataMedium
+oDataMedium = ThisApplication.TransientObjects.CreateDataMedium
+' Check whether the translator has 'SaveCopyAs' options
+If DXFAddIn.HasSaveCopyAsOptions(oDocument, oContext, oOptions) Then
+Dim strIniFile As String
+strIniFile = "C:\temp\dxfout.ini"
+' Create the name-value that specifies the ini file to use.
+oOptions.Value("Export_Acad_IniFile") = strIniFile
+End If
+'Set the destination file name
+oDataMedium.FileName = ThisDoc.PathAndFileName(False) & ".dxf"
+'Publish document.
+DXFAddIn.SaveCopyAs(oDocument, oContext, oOptions, oDataMedium)
+'Launch the dxf file in whatever application Windows is set to open this document type with
+i = MessageBox.Show("Preview the DXF file?", "Title",MessageBoxButtons.YesNo,MessageBoxIcon.Question)
+if i = vbyes then ThisDoc.Launch(oDataMedium.FileName)
+]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Guardar como archivo SAT</Name>
+      <ToolTip>Guardar como documento actual en un archivo SAT.
+(solo ensamblajes y piezas)</ToolTip>
+      <Index>1007</Index>
+      <Code><![CDATA[' Set reference to active document.
+oDoc = ThisApplication.ActiveDocument
+
+' Check the Document type is an assembly or part
+If (oDoc.DocumentType <> kAssemblyDocumentObject And _
+   oDoc.DocumentType <> kPartDocumentObject) Then
+   MsgBox("Error:Document type is not assembly/part")
+   Exit Sub
+End If
+
+' Get document's full file name
+sFname = ThisDoc.PathAndFileName(False) & ".sat"
+
+' Do a 'Save Copy As' to SAT format
+oDoc.SaveAs(sFname, True)
+]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Guardar como archivo IGES</Name>
+      <ToolTip>Guardar como documento actual en un archivo IGES.</ToolTip>
+      <Index>1008</Index>
+      <Code><![CDATA[' Get the IGES translator Add-In.
+Dim oIGESTranslator As TranslatorAddIn
+oIGESTranslator = ThisApplication.ApplicationAddIns.ItemById("{90AF7F44-0C01-11D5-8E83-0010B541CD80}")
+Dim oContext As TranslationContext
+oContext = ThisApplication.TransientObjects.CreateTranslationContext
+Dim oOptions As NameValueMap
+oOptions = ThisApplication.TransientObjects.CreateNameValueMap
+If oIGESTranslator.HasSaveCopyAsOptions(ThisApplication.ActiveDocument, oContext, oOptions) Then
+   ' Set geometry type for wireframe.
+   ' 0 = Surfaces, 1 = Solids, 2 = Wireframe
+   oOptions.Value("GeometryType") = 1
+   ' To set other translator values:
+   ' oOptions.Value("SolidFaceType") = n
+   ' 0 = NURBS, 1 = Analytic
+   ' oOptions.Value("SurfaceType") = n
+   ' 0 = 143(Bounded), 1 = 144(Trimmed)
+oContext.Type = IOMechanismEnum.kFileBrowseIOMechanism
+Dim oData As DataMedium
+oData = ThisApplication.TransientObjects.CreateDataMedium
+oData.FileName = ThisDoc.PathAndFileName(False) & ".igs"
+oIGESTranslator.SaveCopyAs(ThisApplication.ActiveDocument, oContext, oOptions, oData)
+End If
+]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Guardar como archivo STEP</Name>
+      <ToolTip>Guardar como documento actual en un archivo STEP.</ToolTip>
+      <Index>1009</Index>
+      <Code><![CDATA[' Get the STEP translator Add-In.
+Dim oSTEPTranslator As TranslatorAddIn
+oSTEPTranslator = ThisApplication.ApplicationAddIns.ItemById("{90AF7F40-0C01-11D5-8E83-0010B541CD80}")
+Dim oContext As TranslationContext
+oContext = ThisApplication.TransientObjects.CreateTranslationContext
+Dim oOptions As NameValueMap
+oOptions = ThisApplication.TransientObjects.CreateNameValueMap
+
+If oSTEPTranslator.HasSaveCopyAsOptions(ThisApplication.ActiveDocument, oContext, oOptions) Then
+    ' Set application protocol.
+    ' 2 = AP 203 - Configuration Controlled Design
+    ' 3 = AP 214 - Automotive Design
+    oOptions.Value("ApplicationProtocolType") = 3
+    ' Other options...
+    'oOptions.Value("Author") = ""
+    'oOptions.Value("Authorization") = ""
+    'oOptions.Value("Description") = ""
+    'oOptions.Value("Organization") = ""
+    oContext.Type = IOMechanismEnum.kFileBrowseIOMechanism
+    Dim oData As DataMedium
+    oData = ThisApplication.TransientObjects.CreateDataMedium
+    oData.FileName = ThisDoc.PathAndFileName(False) & ".stp"
+oSTEPTranslator.SaveCopyAs(ThisApplication.ActiveDocument, oContext, oOptions, oData)
+End If]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Cuadro de diálogo de selección de archivos</Name>
+      <ToolTip>Cuadro de diálogo de selección de archivos
+Permite editar el código para definir la ruta por defecto y los filtros de extensiones de archivo</ToolTip>
+      <Index>1010</Index>
+      <Code><![CDATA[Dim oFileDlg As inventor.FileDialog = Nothing
+ThisApplication.CreateFileDialog(oFileDlg)
+'oFileDlg.Filter = "Inventor Files (*.iam;*.ipt)|*.iam;*.ipt|All Files (*.*)|*.*"
+'oFileDlg.Filter = "XML Files (*.xml)|*.xml"
+'oFileDlg.Filter = "Excel Files (*.xls;*.xlsx)|*.xls;*.xlsx"
+'oFileDlg.Filter = "Text Files (*.txt;*.csv)|*.txt;*.csv"
+'oFileDlg.Filter = "SAT Files (*.sat)|*.sat"
+'oFileDlg.Filter = "IGES Files (*.igs)|*.igs"
+oFileDlg.Filter = "Step Files (*.stp)|*.stp"
+'oFileDlg.DialogTitle = "Select a File"
+oFileDlg.InitialDirectory = ThisDoc.Path
+oFileDlg.CancelError = True
+On Error Resume Next
+oFileDlg.ShowOpen()
+If Err.Number <> 0 Then
+MessageBox.Show("File not chosen.", "Dialog Cancellation")
+ElseIf oFileDlg.FileName <> "" Then
+selectedfile = oFileDlg.FileName
+MessageBox.Show("File " & selectedfile & " was selected.", "Dialog Selection Made")
+End If]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Plantilla de informe HTML</Name>
+      <ToolTip>Crea un informe HTML con una tabla de nombres de parámetros y sus valores, junto
+con una imagen capturada desde la vista actual del modelo.</ToolTip>
+      <Index>1011</Index>
+      <Code><![CDATA['create an html report sample
+report_title = "Design Report for " & ThisDoc.PathAndFileName(true) 'variable used the body of the html
+description = "Main Parameters and their values" 'variable used in the body of the html
+
+Dim oFile as System.IO.File
+Dim oWrite as System.IO.StreamWriter
+TableMembers = New String () {"d0", "d1", "d2"} 'parameters to include in table
+
+html_filename = ThisDoc.PathAndFileName(False) & ".html"
+
+oWrite = oFile.CreateText(html_filename) 'name and path of html file to create/overwrite
+oWrite.WriteLine(“<HTML>")
+oWrite.WriteLine(“<HEAD>")
+oWrite.WriteLine(“<META CONTENT=""text/html; charset=iso-8859-1"" HTTP-EQUIV=""Content-Type"" >")
+oWrite.WriteLine(“<TITLE>")
+oWrite.WriteLine(report_title) 'set the html search title with local variable
+oWrite.WriteLine(“</TITLE>")
+oWrite.WriteLine(“</HEAD>")
+oWrite.WriteLine(“<BODY BGCOLOR=""#FFFFFF"">")
+oWrite.WriteLine(“<B><EM><H3>")
+oWrite.WriteLine(report_title) 'first line of the report
+oWrite.WriteLine(“</B></EM></H3>")
+oWrite.WriteLine("<B>Date & Time: </B>")
+oWrite.WriteLine(NOW()) 'today's date and time on the second line
+oWrite.WriteLine("<BR>")
+oWrite.WriteLine(“<B>Description: </B>") 
+oWrite.WriteLine(description) 'desciption string goes on the third line of the report
+oWrite.WriteLine(“<BR>") 
+oWrite.WriteLine(“<B>Customer:</B>  Inventor Designers and Engineers<BR><BR>")
+oWrite.WriteLine(“<TABLE BORDER=""1"" WIDTH=""500"">") 'table width in pixels.  Use % to adjust to browser size.
+
+'create html text lines nessesary to build the table for each parameter specified in the TableMembers array
+for each pName as String in TableMembers
+  oWrite.WriteLine(“<TR><TD WIDTH=""50%"">") 'column width is half of table size
+  oWrite.WriteLine(pName) ' parameter name
+  oWrite.WriteLine(“</TD><TD>")
+  oWrite.WriteLine(Parameter(pName) ) ' parameter value
+  oWrite.WriteLine(“</TD> </TR>")
+next
+
+'save iso view to jpg
+imagedoc = ThisDoc.PathAndFileName(False) & ".jpg"
+oCamera = ThisApplication.ActiveView.Camera 'current iso view
+oCamera.fit
+oCamera.apply
+ThisApplication.ActiveView.SaveAsBitmap(imagedoc,1680,1050 ) 
+
+oWrite.WriteLine("</TABLE>") ' end the table
+oWrite.WriteLine("<BR><BR>This is a sample report whose iLogic Rule can be used as a template.<BR>") 'footer notes
+oWrite.WriteLine("iLogic created this report using a rule to generate an html file.")'footer notes
+oWrite.WriteLine("<IMG SRC= """ & imagedoc & """ ALT=""text"" WIDTH = 300 ALIGN = LEFT> ")
+oWrite.WriteLine("</BODY>")
+oWrite.Close()
+
+'option to view report
+go = MessageBox.Show("Would you like to view the Design Report?", "iLogic Reports", MessageBoxButtons.YesNo)
+if go = 6 then ThisDoc.Launch(html_filename)
+]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Comando de voz de Windows</Name>
+      <ToolTip>Permite utilizar el comando de voz de Windows para crear comentarios de audio</ToolTip>
+      <Index>1012</Index>
+      <Code><![CDATA['___Use windows voice command____________
+Dim objSPVoice,colVoices
+objSPVoice = CreateObject("SAPI.SpVoice")
+objSPVoice.Speak ("i Logic Rules")]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Suma de valores de ArrayList</Name>
+      <ToolTip>Calcula la suma total de todos los valores numéricos de una ArrayList (unidimensional)</ToolTip>
+      <Index>1013</Index>
+      <Code><![CDATA[values = MultiValue.List("test")
+sum = 0
+for each oval in values
+sum += oval
+next
+msgbox(sum)]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Dividir frase en palabras</Name>
+      <ToolTip>Divide una cadena de frase (Sentence) en palabras individuales
+Las palabras se capturan en una matriz.</ToolTip>
+      <Index>1014</Index>
+      <Code><![CDATA['specify word splitting characters "space" and "dash"
+Dim Separators() As Char = {" "c, "-"c} 
+Sentence = "This is a sentence string to split into words"
+Words = Sentence.Split(Separators)
+i = 0
+For each wrd in Words
+MessageBox.Show("Word Index #" & i & " = " & Words(i))
+i += 1
+Next
+]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Dividir palabras en caracteres</Name>
+      <ToolTip>Divide una cadena de palabra (Word) en caracteres individuales.
+Puede leerse cualquier carácter de una cadena utilizando un número de índice
+(por ejemplo, letter = string(0) devolvería la primera letra de la cadena)</ToolTip>
+      <Index>1015</Index>
+      <Code><![CDATA[WordString = "word"
+For Each letter In WordString
+MsgBox(letter)
+Next]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Crear archivo de texto</Name>
+      <ToolTip>Permite crear un archivo de texto y escribir en él
+(sobrescribe el archivo cada vez que se ejecuta)</ToolTip>
+      <Index>1016</Index>
+      <Code><![CDATA['____Create and write to a text file_________________
+oWrite = System.IO.File.CreateText(ThisDoc.PathAndFileName(False) & ".txt")
+oWrite.WriteLine("text in first line")
+oWrite.WriteLine("next line")
+oWrite.WriteLine("next line")
+oWrite.Close()
+'open the file
+ThisDoc.Launch(ThisDoc.PathAndFileName(False) & ".txt")
+]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Leer archivo de texto</Name>
+      <ToolTip>Permite leer todo el contenido de un archivo de texto en una variable de cadena.</ToolTip>
+      <Index>1017</Index>
+      <Code><![CDATA['____Open and read a text file_______________________
+oRead = System.IO.File.OpenText(ThisDoc.PathAndFileName(False) & ".txt")
+EntireFile = oRead.ReadToEnd()
+oRead.Close()
+MsgBox(EntireFile, MsgBoxStyle.Information, "Text File Contents")
+]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Agregar archivo de texto</Name>
+      <ToolTip>Agrega a un archivo de texto existente.
+(el archivo debe existir)</ToolTip>
+      <Index>1018</Index>
+      <Code><![CDATA['____Open and append to an existing text file_______
+Dim oAppend As System.IO.StreamWriter
+oFile = ThisDoc.PathAndFileName(False) & ".txt"
+oAppend = IO.File.AppendText(oFile)
+oAppend.WriteLine("new line at the end")
+oAppend.Flush()
+oAppend.Close()
+ThisDoc.Launch(oFile)
+]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Timer</Name>
+      <ToolTip>Sub Main
+    Dim timer As New System.Timers.Timer(1) ' Tiempo en milisegundos (1000 ms = 1 segundo)
+    AddHandler timer.Elapsed, AddressOf OnTimedEvent
+    timer.AutoReset = False ' Para que el temporizador no se reinicie automáticamente
+    timer.Start()
+End Sub
+
+Sub OnTimedEvent(sender As Object, e As System.Timers.ElapsedEventArgs)
+    ' Tu código aquí para ejecutar después de un segundo
+    ' Por ejemplo:
+	    'MsgBox("Ha pasado un segundo")
+	End Sub</ToolTip>
+      <Index>7002</Index>
+      <Code><![CDATA[Sub Main
+    Dim timer As New System.Timers.Timer(1) ' Tiempo en milisegundos (1000 ms = 1 segundo)
+    AddHandler timer.Elapsed, AddressOf OnTimedEvent
+    timer.AutoReset = False ' Para que el temporizador no se reinicie automáticamente
+    timer.Start()
+End Sub
+
+Sub OnTimedEvent(sender As Object, e As System.Timers.ElapsedEventArgs)
+    ' Tu código aquí para ejecutar después de un segundo
+    ' Por ejemplo:
+	    'MsgBox("Ha pasado un segundo")
+	End Sub]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Imprimir documento</Name>
+      <ToolTip>Imprime el documento de Inventor actual.</ToolTip>
+      <Index>1019</Index>
+      <Code><![CDATA[oPrintMgr = ThisApplication.ActiveDocument.PrintManager
+oPrintMgr.ColorMode = kPrintGrayScale
+'oPrintMgr.ColorMode = kPrintColorPalette
+oPrintMgr.NumberOfCopies = 1
+oPrintMgr.Orientation = kPortraitOrientation
+'oPrintMgr.Orientation = kLandscapeOrientation
+oPrintMgr.PaperSize = kPaperSizeCustom
+oPrintMgr.PaperHeight = 11
+oPrintMgr.PaperWidth = 8.5
+oPrintMgr.SubmitPrint
+]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>Dimprop</Name>
+      <ToolTip>'cambiar PROPNAME por el nombre de la prop, customProps es:
+'
+Dim propPROPNAME As [Property] = GetOrCreateProperty(customProps, "PROPNAME")
+'propPROPNAME.Value = valor de pror</ToolTip>
+      <Index>7002</Index>
+      <Code><![CDATA['cambiar PROPNAME por el nombre de la prop, customProps es:
+'customProps = elemento.Definition.Document.PropertySets.Item("Inventor User Defined Properties")
+' donde elemento es el nombre del componente a editar (pieza, dibujo ensamblaje)
+Dim propPROPNAME As [Property] = GetOrCreateProperty(customProps, "PROPNAME")
+'propPROPNAME.Value = valor de prop]]></Code>
+    </CodeSnippet>
+    <CodeSnippet>
+      <Category>Mis snippets</Category>
+      <Name>GetOrCreateProperty</Name>
+      <ToolTip>' Función para obtener o crear una propiedad en un conjunto de propiedades
+Function GetOrCreateProperty(props As Inventor.PropertySet, propName As String) As Inventor.Property
+    Dim prop As Inventor.Property
+    ' Verificar si la propiedad ya existe
+    For Each prop In props
+        If prop.Name = propName Then
+            Return prop ' Devolver la propiedad existente
+        End If
+    Next
+
+    ' Crear la propiedad si no existe
+    Return props.Add(" ", propName)
+End Function</ToolTip>
+      <Index>1020</Index>
+      <Code><![CDATA[' Función para obtener o crear una propiedad en un conjunto de propiedades
+Function GetOrCreateProperty(props As Inventor.PropertySet, propName As String) As Inventor.Property
+    Dim prop As Inventor.Property
+    ' Verificar si la propiedad ya existe
+    For Each prop In props
+        If prop.Name = propName Then
+            Return prop ' Devolver la propiedad existente
+        End If
+    Next
+
+    ' Crear la propiedad si no existe
+    Return props.Add(" ", propName)
+End Function]]></Code>
+    </CodeSnippet>
+  </Snippets>
+</CodeSnippets>
