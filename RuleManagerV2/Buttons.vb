@@ -113,7 +113,7 @@ Public Class Buttons
         ' =====================================================
 
         _buttonsData.Add(New ButtonData(
-            "1) SELECCION BASE",
+            "Selección Base",
             "BTN_SEL_BASE",
             "SELECCION BASE",
             "Part",
@@ -121,7 +121,7 @@ Public Class Buttons
             "icon_ipt_sel_base_32x32.png"))
 
         _buttonsData.Add(New ButtonData(
-            "2) PROP ASIGN PART",
+            "Asignar propiedades de pieza",
             "BTN_PROP_PART",
             "PROP ASIGN PART",
             "Part",
@@ -221,13 +221,18 @@ Public Class Buttons
             AddressOf Rules.EjecutarPrintB3EXTWIDE,
             "icon_10_print_b3_ext_wide_32x32.png"))
 
+        ' =====================================================
+        ' IDW
+        ' =====================================================
+
+
         _buttonsData.Add(New ButtonData(
             "Organizar Proyecto",
             "BTN_ORG_PROY",
             "Clasifica automáticamente archivos del proyecto según reglas internas.",
             "ZeroDoc",
             AddressOf Rules.EjecutarOrganizarProyecto,
-            "icon_10_print_b3_ext_wide_32x32.png"))
+            "icon_organizar_proyecto_32x32.png"))
 
         _buttonsData.Add(New ButtonData(
             "OPCIONES",
@@ -235,7 +240,7 @@ Public Class Buttons
             "Configura el comportamiento del addin RuleManager.",
             "ZeroDoc",
             AddressOf Rules.EjecutarOpciones,
-            "icon_10_print_b3_ext_wide_32x32.png"))
+            "icon_opciones_32x32.png"))
 
     End Sub
 

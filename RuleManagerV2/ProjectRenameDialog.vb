@@ -96,7 +96,7 @@ Public Class ProjectRenameDialog
         Me.MaximizeBox = False
         Me.MinimizeBox = False
         Me.StartPosition = FormStartPosition.CenterScreen
-        Me.BackColor = Color.White
+        Me.BackColor = System.Drawing.Color.White
 
         ' =========================================
         ' TITULO
@@ -104,7 +104,7 @@ Public Class ProjectRenameDialog
         lblTitulo = New Label()
         lblTitulo.Text = "Verifique los datos del proyecto. Modifique si es necesario:"
         lblTitulo.Font = New Font("Segoe UI", 10, FontStyle.Bold)
-        lblTitulo.Location = New Point(20, 15)
+        lblTitulo.Location = New System.Drawing.Point(20, 15)
         lblTitulo.AutoSize = True
         Me.Controls.Add(lblTitulo)
 
@@ -178,15 +178,15 @@ Public Class ProjectRenameDialog
         lblPreviewTitle = New Label()
         lblPreviewTitle.Text = "Nombre resultante:"
         lblPreviewTitle.Font = New Font("Segoe UI", 9, FontStyle.Bold)
-        lblPreviewTitle.Location = New Point(20, previewY)
+        lblPreviewTitle.Location = New System.Drawing.Point(20, previewY)
         lblPreviewTitle.AutoSize = True
         Me.Controls.Add(lblPreviewTitle)
 
         lblPreview = New Label()
         lblPreview.Text = ""
         lblPreview.Font = New Font("Segoe UI", 9, FontStyle.Italic)
-        lblPreview.ForeColor = Color.DarkBlue
-        lblPreview.Location = New Point(20, previewY + 22)
+        lblPreview.ForeColor = System.Drawing.Color.DarkBlue
+        lblPreview.Location = New System.Drawing.Point(20, previewY + 22)
         lblPreview.Size = New Size(totalWidth - 40, 25)
         Me.Controls.Add(lblPreview)
 
@@ -205,9 +205,9 @@ Public Class ProjectRenameDialog
         btnAceptar.Text = "Aceptar y Renombrar"
         btnAceptar.Font = New Font("Segoe UI", 9, FontStyle.Bold)
         btnAceptar.Size = New Size(170, 32)
-        btnAceptar.Location = New Point(20, buttonY)
-        btnAceptar.BackColor = Color.FromArgb(0, 120, 212)
-        btnAceptar.ForeColor = Color.White
+        btnAceptar.Location = New System.Drawing.Point(20, buttonY)
+        btnAceptar.BackColor =System.Drawing.Color.FromArgb(0, 120, 212)
+        btnAceptar.ForeColor = System.Drawing.Color.White
         btnAceptar.FlatStyle = FlatStyle.Flat
         btnAceptar.FlatAppearance.BorderSize = 0
         btnAceptar.DialogResult = DialogResult.OK
@@ -216,7 +216,7 @@ Public Class ProjectRenameDialog
         btnCancelar = New Button()
         btnCancelar.Text = "Cancelar"
         btnCancelar.Size = New Size(120, 32)
-        btnCancelar.Location = New Point(200, buttonY)
+        btnCancelar.Location = New System.Drawing.Point(200, buttonY)
         btnCancelar.DialogResult = DialogResult.Cancel
         Me.Controls.Add(btnCancelar)
 
@@ -244,7 +244,7 @@ Public Class ProjectRenameDialog
         Dim lbl As New Label()
         lbl.Text = text
         lbl.Font = New Font("Segoe UI", 8)
-        lbl.Location = New Point(x, y)
+        lbl.Location = New System.Drawing.Point(x, y)
         lbl.Size = New Size(width, LABEL_HEIGHT)
 
         Return lbl
@@ -260,7 +260,7 @@ Public Class ProjectRenameDialog
         Dim txt As New TextBox()
         txt.Text = ""
         txt.Font = New Font("Segoe UI", 10)
-        txt.Location = New Point(x, y)
+        txt.Location = New System.Drawing.Point(x, y)
         txt.Size = New Size(width, TEXTBOX_HEIGHT)
         txt.BorderStyle = BorderStyle.FixedSingle
         txt.TextAlign = HorizontalAlignment.Center
@@ -276,7 +276,7 @@ Public Class ProjectRenameDialog
         Dim lbl As New Label()
         lbl.Text = "-"
         lbl.Font = New Font("Segoe UI", 11, FontStyle.Bold)
-        lbl.Location = New Point(x, y + 3)
+        lbl.Location = New System.Drawing.Point(x, y + 3)
         lbl.Size = New Size(SEPARATOR_WIDTH, TEXTBOX_HEIGHT)
         lbl.TextAlign = ContentAlignment.MiddleCenter
 

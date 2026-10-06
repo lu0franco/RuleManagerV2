@@ -65,7 +65,7 @@ Public Class OptionsDialog
     Private Sub InitializeComponent()
         ' --- TabControl Principal ---
         _tabControl = New TabControl With {
-            .Location = New Point(10, 10),
+            .Location = New System.Drawing.Point(10, 10),
             .Size = New Size(560, 355),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Bottom
         }
@@ -99,19 +99,19 @@ Public Class OptionsDialog
 
         _btnImportar = New Button With {
             .Text = "Importar...",
-            .Location = New Point(12, yBtn),
+            .Location = New System.Drawing.Point(12, yBtn),
             .Size = New Size(85, 26)
         }
 
         _btnExportar = New Button With {
             .Text = "Exportar...",
-            .Location = New Point(102, yBtn),
+            .Location = New System.Drawing.Point(102, yBtn),
             .Size = New Size(85, 26)
         }
 
         _btnAceptar = New Button With {
             .Text = "Aceptar",
-            .Location = New Point(310, yBtn),
+            .Location = New System.Drawing.Point(310, yBtn),
             .Size = New Size(80, 26)
         }
         AddHandler _btnAceptar.Click, AddressOf OnAceptar
@@ -119,13 +119,13 @@ Public Class OptionsDialog
         _btnCancelar = New Button With {
             .Text = "Cancelar",
             .DialogResult = DialogResult.Cancel,
-            .Location = New Point(395, yBtn),
+            .Location = New System.Drawing.Point(395, yBtn),
             .Size = New Size(80, 26)
         }
 
         _btnAplicar = New Button With {
             .Text = "Aplicar",
-            .Location = New Point(480, yBtn),
+            .Location = New System.Drawing.Point(480, yBtn),
             .Size = New Size(80, 26)
         }
         AddHandler _btnAplicar.Click, AddressOf OnAplicar
@@ -145,26 +145,26 @@ Public Class OptionsDialog
 
         _chkCrearCarpetas = New CheckBox With {
             .Text = "Crear estructura de carpetas (01 - DIBUJOS, 02 - PLANOS, etc.) al cambiar de proyecto",
-            .Location = New Point(20, 35),
+            .Location = New System.Drawing.Point(20, 35),
             .Size = New Size(510, 25)
         }
 
         _chkSincLibrerias = New CheckBox With {
             .Text = "Sincronizar bibliotecas y Content Center automáticamente (StartupTasks)",
-            .Location = New Point(20, 65),
+            .Location = New System.Drawing.Point(20, 65),
             .Size = New Size(510, 25)
         }
 
         _chkSilentOp = New CheckBox With {
             .Text = "Habilitar modo silencioso (SilentOperation) para evitar alertas y diálogos bloqueantes",
-            .Location = New Point(20, 95),
+            .Location = New System.Drawing.Point(20, 95),
             .Size = New Size(510, 25)
         }
 
         tab.Controls.Add(CrearEncabezadoSeccion("Rutas de Auditoría y Diagnóstico", 15, 135))
 
-        Dim lblLogs As New Label With {.Text = "Ruta de archivo log:", .Location = New Point(20, 160), .AutoSize = True}
-        _txtRutaLogs = New TextBox With {.Location = New Point(160, 157), .Size = New Size(360, 23)}
+        Dim lblLogs As New Label With {.Text = "Ruta de archivo log:", .Location = New System.Drawing.Point(20, 160), .AutoSize = True}
+        _txtRutaLogs = New TextBox With {.Location = New System.Drawing.Point(160, 157), .Size = New Size(360, 23)}
 
         tab.Controls.Add(_chkCrearCarpetas)
         tab.Controls.Add(_chkSincLibrerias)
@@ -178,7 +178,7 @@ Public Class OptionsDialog
 
         _chkOmitirCC = New CheckBox With {
             .Text = "Omitir componentes de Content Center y bulonería normalizada al asignar COM",
-            .Location = New Point(20, 35),
+            .Location = New System.Drawing.Point(20, 35),
             .Size = New Size(510, 25)
         }
 
@@ -186,13 +186,13 @@ Public Class OptionsDialog
 
         _chkDetectarSim = New CheckBox With {
             .Text = "Detección recursiva automática de componentes espejados (SEARCHSIMETRIAS)",
-            .Location = New Point(20, 100),
+            .Location = New System.Drawing.Point(20, 100),
             .Size = New Size(510, 25)
         }
 
         _chkActualizarCant = New CheckBox With {
             .Text = "Actualizar propiedad CANTIDAD_USADA en todos los componentes referenciados",
-            .Location = New Point(20, 130),
+            .Location = New System.Drawing.Point(20, 130),
             .Size = New Size(510, 25)
         }
 
@@ -204,20 +204,20 @@ Public Class OptionsDialog
     Private Sub ConstruirTabPlanos(tab As TabPage)
         tab.Controls.Add(CrearEncabezadoSeccion("Listas de Materiales y Extracción", 15, 12))
 
-        Dim lblTmpl As New Label With {.Text = "Plantilla Excel LDM:", .Location = New Point(20, 38), .AutoSize = True}
-        _txtPlantillaExcel = New TextBox With {.Location = New Point(160, 35), .Size = New Size(360, 23)}
+        Dim lblTmpl As New Label With {.Text = "Plantilla Excel LDM:", .Location = New System.Drawing.Point(20, 38), .AutoSize = True}
+        _txtPlantillaExcel = New TextBox With {.Location = New System.Drawing.Point(160, 35), .Size = New Size(360, 23)}
 
         _chkOrdenarHojas = New CheckBox With {
             .Text = "Ordenar hojas de dibujo alfabética y numéricamente en documentos .idw",
-            .Location = New Point(20, 68),
+            .Location = New System.Drawing.Point(20, 68),
             .Size = New Size(510, 25)
         }
 
         tab.Controls.Add(CrearEncabezadoSeccion("Impresión a PDF", 15, 110))
 
-        Dim lblPdf As New Label With {.Text = "Formato PDF predeterminado:", .Location = New Point(20, 135), .AutoSize = True}
+        Dim lblPdf As New Label With {.Text = "Formato PDF predeterminado:", .Location = New System.Drawing.Point(20, 135), .AutoSize = True}
         _cmbFormatoPdf = New ComboBox With {
-            .Location = New Point(200, 132),
+            .Location = New System.Drawing.Point(200, 132),
             .Size = New Size(180, 23),
             .DropDownStyle = ComboBoxStyle.DropDownList
         }
@@ -235,13 +235,13 @@ Public Class OptionsDialog
 
         _chkCuboCorte = New CheckBox With {
             .Text = "Calcular automáticamente cubo de corte (LARGO, ANCHO, ESPESOR) en DimensionPart",
-            .Location = New Point(20, 35),
+            .Location = New System.Drawing.Point(20, 35),
             .Size = New Size(510, 25)
         }
 
         _chkChapa = New CheckBox With {
             .Text = "Detectar piezas de chapa metálica y calcular desarrollo / factor K (PB CHAPA)",
-            .Location = New Point(20, 65),
+            .Location = New System.Drawing.Point(20, 65),
             .Size = New Size(510, 25)
         }
 
@@ -254,25 +254,25 @@ Public Class OptionsDialog
 
         _chkExcluirOldVersions = New CheckBox With {
             .Text = "Excluir carpetas 'OldVersions' en cualquier nivel de la ruta",
-            .Location = New Point(20, 35),
+            .Location = New System.Drawing.Point(20, 35),
             .Size = New Size(510, 25)
         }
 
         _chkPreservarEspeciales = New CheckBox With {
             .Text = "Preservar subcarpetas especiales de ensamblaje (AIP y Frame) dentro de 01 - DIBUJOS",
-            .Location = New Point(20, 65),
+            .Location = New System.Drawing.Point(20, 65),
             .Size = New Size(510, 25)
         }
 
         _chkProtegerRouted = New CheckBox With {
             .Text = "Proteger sistemas ruteados (conduits, tuberías, cables) durante el renombrado",
-            .Location = New Point(20, 95),
+            .Location = New System.Drawing.Point(20, 95),
             .Size = New Size(510, 25)
         }
 
         _chkEnrutarMulticorte = New CheckBox With {
             .Text = "Enrutar archivos DXF/DWG con nombre 'MULTICORTE' hacia '03 - CORTES'",
-            .Location = New Point(20, 125),
+            .Location = New System.Drawing.Point(20, 125),
             .Size = New Size(510, 25)
         }
 
@@ -285,16 +285,16 @@ Public Class OptionsDialog
     Private Sub ConstruirTabOdoo(tab As TabPage)
         tab.Controls.Add(CrearEncabezadoSeccion("Parámetros de Exportación Odoo ERP", 15, 12))
 
-        Dim lblTipoBom As New Label With {.Text = "Tipo de BoM predeterminado:", .Location = New Point(20, 38), .AutoSize = True}
+        Dim lblTipoBom As New Label With {.Text = "Tipo de BoM predeterminado:", .Location = New System.Drawing.Point(20, 38), .AutoSize = True}
         _cmbTipoBom = New ComboBox With {
-            .Location = New Point(200, 35),
+            .Location = New System.Drawing.Point(200, 35),
             .Size = New Size(160, 23),
             .DropDownStyle = ComboBoxStyle.DropDownList
         }
         _cmbTipoBom.Items.AddRange(New Object() {"Kit", "Manufacture"})
 
-        Dim lblPrefijo As New Label With {.Text = "Prefijo External ID (Proyecto):", .Location = New Point(20, 70), .AutoSize = True}
-        _txtPrefijoExtId = New TextBox With {.Location = New Point(200, 67), .Size = New Size(160, 23)}
+        Dim lblPrefijo As New Label With {.Text = "Prefijo External ID (Proyecto):", .Location = New System.Drawing.Point(20, 70), .AutoSize = True}
+        _txtPrefijoExtId = New TextBox With {.Location = New System.Drawing.Point(200, 67), .Size = New Size(160, 23)}
 
         tab.Controls.Add(lblTipoBom)
         tab.Controls.Add(_cmbTipoBom)
@@ -303,13 +303,13 @@ Public Class OptionsDialog
     End Sub
 
     Private Function CrearEncabezadoSeccion(titulo As String, x As Integer, y As Integer) As Control
-        Dim pnl As New Panel With {.Location = New Point(x, y), .Size = New Size(520, 20)}
+        Dim pnl As New Panel With {.Location = New System.Drawing.Point(x, y), .Size = New Size(520, 20)}
         Dim lbl As New Label With {
             .Text = titulo,
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
-            .ForeColor = Color.FromArgb(0, 50, 120),
+            .ForeColor = System.Drawing.Color.FromArgb(0, 50, 120),
             .AutoSize = True,
-            .Location = New Point(0, 0)
+            .Location = New System.Drawing.Point(0, 0)
         }
         pnl.Controls.Add(lbl)
         Return pnl

@@ -556,19 +556,19 @@ Public Class ComercialAssignmentDialog
             Dim cam As Camera = view.Camera
             Dim box As Box = occ.RangeBox
 
-            Dim center As Inventor.Point = _app.TransientGeometry.CreatePoint(
-                (box.MinPoint.X + box.MaxPoint.X) / 2,
-                (box.MinPoint.Y + box.MaxPoint.Y) / 2,
-                (box.MinPoint.Z + box.MaxPoint.Z) / 2)
+            Dim center As Inventor.Point = _app.TransientGeometry.CreateSystem.Drawing.Point(
+                (box.MinSystem.Drawing.Point.X + box.MaxSystem.Drawing.Point.X) / 2,
+                (box.MinSystem.Drawing.Point.Y + box.MaxSystem.Drawing.Point.Y) / 2,
+                (box.MinSystem.Drawing.Point.Z + box.MaxSystem.Drawing.Point.Z) / 2)
 
-            Dim sizeX As Double = Math.Abs(box.MaxPoint.X - box.MinPoint.X)
-            Dim sizeY As Double = Math.Abs(box.MaxPoint.Y - box.MinPoint.Y)
-            Dim sizeZ As Double = Math.Abs(box.MaxPoint.Z - box.MinPoint.Z)
+            Dim sizeX As Double = Math.Abs(box.MaxSystem.Drawing.Point.X - box.MinSystem.Drawing.Point.X)
+            Dim sizeY As Double = Math.Abs(box.MaxSystem.Drawing.Point.Y - box.MinSystem.Drawing.Point.Y)
+            Dim sizeZ As Double = Math.Abs(box.MaxSystem.Drawing.Point.Z - box.MinSystem.Drawing.Point.Z)
             Dim maxSize As Double = Math.Max(sizeX, Math.Max(sizeY, sizeZ))
             Dim distance As Double = Math.Max(maxSize * 2.5, 10)
 
-            cam.TargetPoint = center
-            cam.EyePoint = _app.TransientGeometry.CreatePoint(
+            cam.TargetSystem.Drawing.Point = center
+            cam.EyeSystem.Drawing.Point = _app.TransientGeometry.CreateSystem.Drawing.Point(
                 center.X + distance,
                 center.Y + distance,
                 center.Z + distance)

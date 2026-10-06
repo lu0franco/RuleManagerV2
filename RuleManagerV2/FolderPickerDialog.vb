@@ -44,13 +44,13 @@ Public Class FolderPickerDialog
         btnOk.Text = "Aceptar"
         btnOk.DialogResult = DialogResult.OK
         btnOk.Size = New Drawing.Size(80, 28)
-        btnOk.Location = New Drawing.Point(240, 10)
+        btnOk.Location = New System.Drawing.Point(240, 10)
 
         Dim btnCancel As New Button()
         btnCancel.Text = "Cancelar"
         btnCancel.DialogResult = DialogResult.Cancel
         btnCancel.Size = New Drawing.Size(80, 28)
-        btnCancel.Location = New Drawing.Point(330, 10)
+        btnCancel.Location = New System.Drawing.Point(330, 10)
 
         panelBottom.Controls.Add(btnOk)
         panelBottom.Controls.Add(btnCancel)
