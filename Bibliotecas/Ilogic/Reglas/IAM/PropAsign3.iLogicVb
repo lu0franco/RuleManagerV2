@@ -1,9 +1,10 @@
-﻿Imports System
+Imports System
 Imports System.Collections.Generic
 Imports Inventor
 'Dim factoryDoc = ThisDoc.FactoryDocument
 
 Sub Main()
+SharedVariable("DictConsultasMEC") = New Dictionary(Of String, Boolean)(StringComparer.OrdinalIgnoreCase)
 iLogicVb.RunExternalRule("D:\Bibliotecas\Ilogic\Reglas\IAM\PropAsignaux.iLogicVb")
 
 ' Obtener el ensamblaje activo
@@ -268,7 +269,76 @@ Function ASIGN(propMC As [Property], propCYP As [Property], propMEC As [Property
 			propANCHO.Value = totalWidthstr
 			standardProperties.Item("Project").Value = SharedVariable("descripcion")
 			standardProperties.Item("Vendor").Value = SharedVariable("Cliente")
-			'MsgBox("MEC")
+
+			' Si la propiedad MEC tiene el valor "✓", mostrar ventana y consultar sobremedida (+3mm)
+			If propMEC.Value = "✓" Then
+				Dim docPath As String = ""
+				Try
+					docPath = elemento.Definition.Document.FullFileName
+				Catch
+					docPath = elemento.Name
+				End Try
+
+				Dim dictMEC As Dictionary(Of String, Boolean) = SharedVariable("DictConsultasMEC")
+				If dictMEC Is Nothing Then
+					dictMEC = New Dictionary(Of String, Boolean)(StringComparer.OrdinalIgnoreCase)
+					SharedVariable("DictConsultasMEC") = dictMEC
+				End If
+
+				If Not dictMEC.ContainsKey(docPath) Then
+					dictMEC.Add(docPath, True)
+
+					Dim sPartNumber As String = ""
+					Try
+						sPartNumber = CStr(standardProperties.Item("Part Number").Value)
+					Catch
+						sPartNumber = elemento.Name
+					End Try
+
+					Dim sStockNumber As String = ""
+					Try
+						sStockNumber = CStr(standardProperties.Item("Stock Number").Value)
+					Catch
+					End Try
+					If String.IsNullOrEmpty(sStockNumber) Then
+						Try
+							sStockNumber = CStr(customProps.Item("Stock Number").Value)
+						Catch
+						End Try
+					End If
+
+					Dim sMatPlano As String = ""
+					Try
+						sMatPlano = CStr(propMAT_PLANO.Value)
+					Catch
+					End Try
+
+					Dim sMensaje As String = "Componente MECANIZADO (MEC):" & vbCrLf & vbCrLf & _
+						"• Part Number: " & sPartNumber & vbCrLf & _
+						"• Stock Number: " & sStockNumber & vbCrLf & _
+						"• Material Plano: " & sMatPlano & vbCrLf & _
+						"• Largo: " & totalLengthstr & vbCrLf & _
+						"• Ancho: " & totalWidthstr & vbCrLf & vbCrLf & _
+						"¿Desea sumarle +3mm al Largo?"
+
+					Dim respuesta As Integer = MsgBox(sMensaje, vbYesNo + vbQuestion, "MEC - " & sPartNumber)
+					If respuesta = vbYes Then
+						Dim numLargo As Double = 0
+						Dim strLimpio As String = totalLengthstr.Replace("mm", "").Trim()
+						If Double.TryParse(strLimpio, numLargo) Then
+							numLargo = numLargo + 3
+							totalLengthstr = numLargo.ToString() & " mm"
+						Else
+							Try
+								numLargo = CDbl(strLimpio) + 3
+								totalLengthstr = numLargo.ToString() & " mm"
+							Catch
+							End Try
+						End If
+						propLARGO.Value = totalLengthstr
+					End If
+				End If
+			End If
 	End Select
 End Function
 
@@ -319,15 +389,6 @@ Function CalculateTotalLength(elemento As ComponentOccurrence) As String
 	End If
 
 	totalLength = Math.Round(totalLength)
-	'If propMEC.Value = "✓" Then
-	Try
-		'MsgBox(elemento.Definition.Document.PropertySets.Item("Inventor User Defined Properties").Item("MEC").Value)
-		If elemento.Definition.Document.PropertySets.Item("Inventor User Defined Properties").Item("MEC").Value = "✓" Then
-			'If propMEC.Value = "✓" Then
-			'totalLength = totalLength + 3
-		End If
-	Catch
-	End Try
 
 	' Convertir el totalLength a una cadena y agregar "mm"
 	Dim totalLengthStr As String = totalLength.ToString() & " mm"
