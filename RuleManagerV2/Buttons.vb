@@ -98,7 +98,7 @@ Public Class Buttons
             "Convierte un proyecto preliminar en definitivo usando datos del ensamblaje principal.",
             "Assembly",
             AddressOf Rules.EjecutarProjectRename,
-            "icon_ordenar_proyecto_32x32.png"))
+            "icon_proy_rename_32x32.png"))
 
         _buttonsData.Add(New ButtonData(
             "Renombrar Componentes",
@@ -106,7 +106,7 @@ Public Class Buttons
             "Renombra automáticamente las piezas y ensamblajes del modelo según Part Number y Stock Number.",
             "Assembly",
             AddressOf Rules.EjecutarRenombrarComponentes,
-            "icon_ordenar_proyecto_32x32.png"))
+            "icon_renombrar_comp_32x32.png"))
 
         ' =====================================================
         ' IPT

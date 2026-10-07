@@ -72,6 +72,11 @@ Public Class FileClassifier
     ' VERIFICAR EXCLUSIONES EN TODA LA RUTA RELATIVA
     ' =========================================================
     Private Shared Function IsInExcludedPath(filePath As String, sourceRoot As String) As Boolean
+        ' Si la opción de excluir OldVersions no está activa, no excluir por esta regla
+        If Not AddinSettings.Current.ExcluirOldVersions Then
+            Return False
+        End If
+
         If String.IsNullOrEmpty(sourceRoot) Then
             Dim parentFolder As String = IO.Path.GetFileName(IO.Path.GetDirectoryName(filePath))
             For Each carpetaExcluida As String In _carpetasExcluidas

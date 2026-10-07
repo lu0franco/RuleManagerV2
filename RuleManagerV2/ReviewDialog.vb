@@ -441,8 +441,11 @@ Public Class ReviewDialog
             End If
         Next
 
-        ' --- FASE 3: ELIMINAR OldVersions ---
-        Dim oldVersionsEliminadas As Integer = EliminarOldVersions(_rootPath)
+        ' --- FASE 3: ELIMINAR OldVersions (Solo si NO está excluida en Opciones) ---
+        Dim oldVersionsEliminadas As Integer = 0
+        If Not AddinSettings.Current.ExcluirOldVersions Then
+            oldVersionsEliminadas = EliminarOldVersions(_rootPath)
+        End If
 
         ' --- FASE 4: ELIMINAR CARPETAS VACÍAS ---
         Dim carpetasVaciasEliminadas As Integer = 0
@@ -457,13 +460,22 @@ Public Class ReviewDialog
         _progress.Visible = False
         Me.Enabled = True
 
-        MessageBox.Show(
+        Dim msgResumen As String =
             "Organización completada:" & vbCrLf &
             "Procesados: " & archivosProcesados & vbCrLf &
             "Ignorados: " & archivosIgnorados & vbCrLf &
-            "Errores: " & archivosError & vbCrLf & vbCrLf &
-            "OldVersions eliminadas: " & oldVersionsEliminadas & vbCrLf &
-            "Carpetas vacías eliminadas: " & carpetasVaciasEliminadas,
+            "Errores: " & archivosError & vbCrLf & vbCrLf
+
+        If AddinSettings.Current.ExcluirOldVersions Then
+            msgResumen &= "Carpetas 'OldVersions': Preservadas (excluidas del borrado)" & vbCrLf
+        Else
+            msgResumen &= "OldVersions eliminadas: " & oldVersionsEliminadas & vbCrLf
+        End If
+
+        msgResumen &= "Carpetas vacías eliminadas: " & carpetasVaciasEliminadas
+
+        MessageBox.Show(
+            msgResumen,
             "Organizar Proyecto",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information)
@@ -530,6 +542,11 @@ Public Class ReviewDialog
             Dim esRaizProyecto As Boolean = String.Equals(rootPath, _rootPath, StringComparison.OrdinalIgnoreCase)
 
             If esCarpetaBase Or esRaizProyecto Then Return count
+
+            ' Preservar OldVersions si la opción de exclusión está activada
+            If AddinSettings.Current.ExcluirOldVersions AndAlso folderName.Equals("OldVersions", StringComparison.OrdinalIgnoreCase) Then
+                Return count
+            End If
 
             Dim tieneArchivos As Boolean = IO.Directory.GetFiles(rootPath).Length > 0
             Dim tieneSubcarpetas As Boolean = IO.Directory.GetDirectories(rootPath).Length > 0
