@@ -1,4 +1,4 @@
-﻿Imports Inventor
+Imports Inventor
 Imports System.IO
 Imports System.Linq
 Imports System.Collections.Generic
@@ -178,6 +178,12 @@ Public Class RenombradorComponentes
 
             If Not bDryRun Then
                 ReemplazarTodasLasOcurrencias(oAllOccurrences)
+                oAsmDoc.Update2(True)
+            End If
+
+            If Not bDryRun Then
+                RegistrarLog(vbCrLf & "=== FASE REEMPLAZO DE REFERENCIAS DE SIMETRÍA Y COMPONENTES DERIVADOS ===" & vbCrLf)
+                ActualizarReferenciasDeSimetriaYDerivadas(oAllOccurrences, oAsmDoc)
                 oAsmDoc.Update2(True)
             End If
 
@@ -522,6 +528,318 @@ Public Class RenombradorComponentes
             End Try
         Next
         Return maxDepth
+    End Function
+
+    ' ═══════════════════════════════════════════════════════════════════════════════
+    ' ACTUALIZACIÓN DE REFERENCIAS EN PIEZAS CON SIMETRÍA Y COMPONENTES DERIVADOS
+    ' ═══════════════════════════════════════════════════════════════════════════════
+
+    Private Sub ActualizarReferenciasDeSimetriaYDerivadas(ByVal oAllOccurrences As List(Of ComponentOccurrence), ByVal oAsmDoc As AssemblyDocument)
+        RegistrarLog("🔍 Buscando piezas con simetría y componentes derivados para reasignar referencias a los nuevos nombres...")
+
+        Dim filesToInspect As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+
+        ' 1. Incluir todos los archivos nuevos/clonados
+        For Each kvp In _renamedFiles
+            If Not String.IsNullOrEmpty(kvp.Value) AndAlso IOFile.Exists(kvp.Value) Then
+                filesToInspect.Add(kvp.Value)
+            End If
+        Next
+
+        ' 2. Incluir todos los documentos de las ocurrencias actuales (por si alguno con simetría no fue clonado/renombrado)
+        For Each oOcc As ComponentOccurrence In oAllOccurrences
+            If oOcc Is Nothing Then Continue For
+            Try
+                Dim d As Document = Nothing
+                If TryGetDocumentFromOcc(oOcc, d) AndAlso d IsNot Nothing Then
+                    Dim p As String = d.FullFileName
+                    If Not String.IsNullOrEmpty(p) AndAlso IOFile.Exists(p) Then
+                        If _renamedFiles.ContainsKey(p) AndAlso IOFile.Exists(_renamedFiles(p)) Then
+                            filesToInspect.Add(_renamedFiles(p))
+                        Else
+                            filesToInspect.Add(p)
+                        End If
+                    End If
+                End If
+            Catch
+            End Try
+        Next
+
+        ' 3. Incluir el ensamblaje raíz
+        If oAsmDoc IsNot Nothing AndAlso Not String.IsNullOrEmpty(oAsmDoc.FullFileName) Then
+            Dim rootPath As String = oAsmDoc.FullFileName
+            If _renamedFiles.ContainsKey(rootPath) AndAlso IOFile.Exists(_renamedFiles(rootPath)) Then
+                filesToInspect.Add(_renamedFiles(rootPath))
+            Else
+                filesToInspect.Add(rootPath)
+            End If
+        End If
+
+        RegistrarLog("   📁 Total de archivos a examinar para referencias de simetría/derivadas: " & filesToInspect.Count)
+
+        Dim countActualizados As Integer = 0
+
+        For Each sFilePath As String In filesToInspect
+            If _routedSystemPaths.Contains(sFilePath) Then Continue For
+
+            If ProcesarReferenciasDeDocumentoIndividual(sFilePath) Then
+                countActualizados += 1
+            End If
+        Next
+
+        RegistrarLog("✅ Total de archivos con simetría/derivadas actualizados: " & countActualizados)
+    End Sub
+
+    Private Function ProcesarReferenciasDeDocumentoIndividual(ByVal sDocPath As String) As Boolean
+        If String.IsNullOrEmpty(sDocPath) OrElse Not IOFile.Exists(sDocPath) Then Return False
+
+        Dim oDoc As Document = Nothing
+        Dim bWeOpenedIt As Boolean = False
+        Dim bModified As Boolean = False
+
+        Try
+            ' 1. Buscar si ya está abierto en la sesión de Inventor
+            For Each d As Document In oApp.Documents
+                If String.Equals(d.FullFileName, sDocPath, StringComparison.OrdinalIgnoreCase) Then
+                    oDoc = d
+                    Exit For
+                End If
+            Next
+
+            ' 2. Si no está abierto, abrirlo de forma invisible
+            If oDoc Is Nothing Then
+                oDoc = oApp.Documents.Open(sDocPath, False)
+                bWeOpenedIt = True
+            End If
+
+            If oDoc Is Nothing Then Return False
+
+            ' === ESTRATEGIA 1: Componentes derivados en piezas (PartDocument -> ReferenceComponents) ===
+            If TypeOf oDoc Is PartDocument Then
+                Dim partDoc As PartDocument = CType(oDoc, PartDocument)
+                Dim partDef As PartComponentDefinition = partDoc.ComponentDefinition
+
+                If partDef.ReferenceComponents IsNot Nothing Then
+                    ' A. DerivedPartComponents (Simetría de piezas / Opposite Hand / Piezas derivadas)
+                    Try
+                        If partDef.ReferenceComponents.DerivedPartComponents IsNot Nothing Then
+                            For Each oDP As DerivedPartComponent In partDef.ReferenceComponents.DerivedPartComponents
+                                Try
+                                    Dim oFD As FileDescriptor = Nothing
+                                    Try
+                                        If oDP.ReferencedDocumentDescriptor IsNot Nothing Then
+                                            oFD = oDP.ReferencedDocumentDescriptor.ReferencedFileDescriptor
+                                        End If
+                                    Catch
+                                    End Try
+
+                                    If oFD Is Nothing Then
+                                        Try : oFD = oDP.ReferencedFileDescriptor : Catch : End Try
+                                    End If
+
+                                    If oFD IsNot Nothing Then
+                                        If IntentarReemplazarFileDescriptor(oFD, sDocPath, "Simetría (DerivedPart)") Then
+                                            bModified = True
+                                        End If
+                                    End If
+                                Catch exDP As Exception
+                                    RegistrarLog("   ⚠️ Error al revisar DerivedPartComponent en " & IOPath.GetFileName(sDocPath) & ": " & exDP.Message)
+                                End Try
+                            Next
+                        End If
+                    Catch
+                    End Try
+
+                    ' B. DerivedAssemblyComponents
+                    Try
+                        If partDef.ReferenceComponents.DerivedAssemblyComponents IsNot Nothing Then
+                            For Each oDA As DerivedAssemblyComponent In partDef.ReferenceComponents.DerivedAssemblyComponents
+                                Try
+                                    Dim oFD As FileDescriptor = Nothing
+                                    Try
+                                        If oDA.ReferencedDocumentDescriptor IsNot Nothing Then
+                                            oFD = oDA.ReferencedDocumentDescriptor.ReferencedFileDescriptor
+                                        End If
+                                    Catch
+                                    End Try
+
+                                    If oFD Is Nothing Then
+                                        Try : oFD = oDA.ReferencedFileDescriptor : Catch : End Try
+                                    End If
+
+                                    If oFD IsNot Nothing Then
+                                        If IntentarReemplazarFileDescriptor(oFD, sDocPath, "Simetría (DerivedAssembly)") Then
+                                            bModified = True
+                                        End If
+                                    End If
+                                Catch exDA As Exception
+                                    RegistrarLog("   ⚠️ Error al revisar DerivedAssemblyComponent en " & IOPath.GetFileName(sDocPath) & ": " & exDA.Message)
+                                End Try
+                            Next
+                        End If
+                    Catch
+                    End Try
+                End If
+            End If
+
+            ' === ESTRATEGIA 2: Componentes derivados en ensamblajes (AssemblyDocument -> ReferenceComponents) ===
+            If TypeOf oDoc Is AssemblyDocument Then
+                Dim asmDoc As AssemblyDocument = CType(oDoc, AssemblyDocument)
+                Dim asmDef As AssemblyComponentDefinition = asmDoc.ComponentDefinition
+
+                If asmDef.ReferenceComponents IsNot Nothing Then
+                    Try
+                        If asmDef.ReferenceComponents.DerivedPartComponents IsNot Nothing Then
+                            For Each oDP As DerivedPartComponent In asmDef.ReferenceComponents.DerivedPartComponents
+                                Try
+                                    Dim oFD As FileDescriptor = Nothing
+                                    If oDP.ReferencedDocumentDescriptor IsNot Nothing Then
+                                        oFD = oDP.ReferencedDocumentDescriptor.ReferencedFileDescriptor
+                                    End If
+                                    If oFD IsNot Nothing Then
+                                        If IntentarReemplazarFileDescriptor(oFD, sDocPath, "Simetría en IAM (DerivedPart)") Then
+                                            bModified = True
+                                        End If
+                                    End If
+                                Catch
+                                End Try
+                            Next
+                        End If
+                    Catch
+                    End Try
+
+                    Try
+                        If asmDef.ReferenceComponents.DerivedAssemblyComponents IsNot Nothing Then
+                            For Each oDA As DerivedAssemblyComponent In asmDef.ReferenceComponents.DerivedAssemblyComponents
+                                Try
+                                    Dim oFD As FileDescriptor = Nothing
+                                    If oDA.ReferencedDocumentDescriptor IsNot Nothing Then
+                                        oFD = oDA.ReferencedDocumentDescriptor.ReferencedFileDescriptor
+                                    End If
+                                    If oFD IsNot Nothing Then
+                                        If IntentarReemplazarFileDescriptor(oFD, sDocPath, "Simetría en IAM (DerivedAssembly)") Then
+                                            bModified = True
+                                        End If
+                                    End If
+                                Catch
+                                End Try
+                            Next
+                        End If
+                    Catch
+                    End Try
+                End If
+            End If
+
+            ' === ESTRATEGIA 3: ReferencedFileDescriptors generales del documento ===
+            Try
+                Dim oFile As Inventor.File = oDoc.File
+                If oFile IsNot Nothing AndAlso oFile.ReferencedFileDescriptors IsNot Nothing Then
+                    For i As Integer = 1 To oFile.ReferencedFileDescriptors.Count
+                        Dim oFD As FileDescriptor = Nothing
+                        Try : oFD = oFile.ReferencedFileDescriptors.Item(i) : Catch : Continue For : End Try
+                        If oFD IsNot Nothing Then
+                            If IntentarReemplazarFileDescriptor(oFD, sDocPath, "FileDescriptor") Then
+                                bModified = True
+                            End If
+                        End If
+                    Next
+                End If
+            Catch ex As Exception
+            End Try
+
+            ' === ESTRATEGIA 4: ReferencedDocumentDescriptors generales del documento ===
+            Try
+                If oDoc.ReferencedDocumentDescriptors IsNot Nothing Then
+                    For i As Integer = 1 To oDoc.ReferencedDocumentDescriptors.Count
+                        Dim oDocDesc As DocumentDescriptor = Nothing
+                        Try : oDocDesc = oDoc.ReferencedDocumentDescriptors.Item(i) : Catch : Continue For : End Try
+                        If oDocDesc IsNot Nothing AndAlso oDocDesc.ReferencedFileDescriptor IsNot Nothing Then
+                            If IntentarReemplazarFileDescriptor(oDocDesc.ReferencedFileDescriptor, sDocPath, "DocumentDescriptor") Then
+                                bModified = True
+                            End If
+                        End If
+                    Next
+                End If
+            Catch ex As Exception
+            End Try
+
+            ' Si hubo cambios, forzar actualización y guardado
+            If bModified Then
+                Try : oDoc.Update2(True) : Catch : Try : oDoc.Update() : Catch : End Try : End Try
+                Try : oDoc.Save2(False) : Catch : Try : oDoc.Save() : Catch : End Try : End Try
+                RegistrarLog("💾 Guardados cambios de simetría en: " & IOPath.GetFileName(sDocPath))
+            End If
+
+            ' Si lo abrimos nosotros, cerrarlo
+            If bWeOpenedIt AndAlso oDoc IsNot Nothing Then
+                Try
+                    oDoc.Close(False)
+                Catch
+                End Try
+            End If
+
+            Return bModified
+
+        Catch ex As Exception
+            RegistrarLog("❌ Error procesando simetría en " & IOPath.GetFileName(sDocPath) & ": " & ex.Message)
+            If bWeOpenedIt AndAlso oDoc IsNot Nothing Then
+                Try : oDoc.Close(False) : Catch : End Try
+            End If
+            Return False
+        End Try
+    End Function
+
+    Private Function IntentarReemplazarFileDescriptor(ByVal oFD As FileDescriptor, ByVal sDocOwnerPath As String, ByVal sContexto As String) As Boolean
+        If oFD Is Nothing Then Return False
+
+        Dim sRefPath As String = ""
+        Try
+            sRefPath = oFD.FullFileName
+        Catch
+        End Try
+
+        If String.IsNullOrEmpty(sRefPath) Then
+            Try : sRefPath = oFD.LogicalFileName : Catch : End Try
+        End If
+
+        If String.IsNullOrEmpty(sRefPath) Then Return False
+
+        Dim sNewPath As String = ObtenerNuevoPathSiFueRenombrado(sRefPath)
+        If String.IsNullOrEmpty(sNewPath) Then Return False
+        If String.Equals(sRefPath, sNewPath, StringComparison.OrdinalIgnoreCase) Then Return False
+
+        If Not IOFile.Exists(sNewPath) Then
+            RegistrarLog("   ⚠️ Clon no existe para simetría: " & IOPath.GetFileName(sNewPath))
+            Return False
+        End If
+
+        Try
+            oFD.ReplaceReference(sNewPath)
+            RegistrarLog("   🔄 [" & sContexto & "] " & IOPath.GetFileName(sRefPath) & " -> " & IOPath.GetFileName(sNewPath) & " (en " & IOPath.GetFileName(sDocOwnerPath) & ")")
+            Return True
+        Catch ex As Exception
+            RegistrarLog("   ❌ ERROR ReplaceReference (" & sContexto & "): " & IOPath.GetFileName(sRefPath) & " -> " & IOPath.GetFileName(sNewPath) & " - " & ex.Message)
+            Return False
+        End Try
+    End Function
+
+    Private Function ObtenerNuevoPathSiFueRenombrado(ByVal sRefPath As String) As String
+        If String.IsNullOrEmpty(sRefPath) Then Return Nothing
+
+        ' 1. Búsqueda exacta por ruta completa
+        If _renamedFiles.ContainsKey(sRefPath) Then
+            Return _renamedFiles(sRefPath)
+        End If
+
+        ' 2. Búsqueda por nombre de archivo (por si la referencia tiene ruta relativa o normalizada distinta)
+        Dim sFileName As String = IOPath.GetFileName(sRefPath)
+        For Each kvp In _renamedFiles
+            If String.Equals(IOPath.GetFileName(kvp.Key), sFileName, StringComparison.OrdinalIgnoreCase) Then
+                Return kvp.Value
+            End If
+        Next
+
+        Return Nothing
     End Function
 
     ' ═══════════════════════════════════════════════════════════════════════════════
@@ -962,13 +1280,14 @@ Public Class RenombradorComponentes
 
         Dim sFinalName As String = ""
 
-        If Not String.IsNullOrEmpty(sStockNumber) AndAlso Not String.IsNullOrEmpty(sPartNumberStd) Then
-            sFinalName = sStockNumber & " - " & sPartNumberStd
-        ElseIf Not String.IsNullOrEmpty(sStockNumber) Then
-            sFinalName = sStockNumber
-        Else
-            sFinalName = sPartNumberStd
-        End If
+        ' If Not String.IsNullOrEmpty(sStockNumber) AndAlso Not String.IsNullOrEmpty(sPartNumberStd) Then
+        'sFinalName = sStockNumber & " - " & sPartNumberStd
+        sFinalName = sPartNumberStd
+        ' ElseIf Not String.IsNullOrEmpty(sStockNumber) Then
+        '    sFinalName = sStockNumber
+        'Else
+        '   sFinalName = sPartNumberStd
+        ' End If
 
         Return CleanFileName(sFinalName, False)
     End Function
@@ -1016,7 +1335,9 @@ Public Class RenombradorComponentes
             parts.Add(sVendor)
         End If
 
-        Dim sFinalName As String = String.Join(" - ", parts)
+        'Dim sFinalName As String = String.Join(" - ", parts)
+
+        Dim sFinalName As String = sPartNumber
         Return CleanFileName(sFinalName, False)
     End Function
 

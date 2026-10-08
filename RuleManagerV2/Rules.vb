@@ -1,4 +1,4 @@
-﻿Imports System.Windows.Forms
+Imports System.Windows.Forms
 Imports Inventor
 Imports IODirectory = System.IO.Directory
 Imports IOFile = System.IO.File
@@ -154,6 +154,143 @@ Public Class Rules
         End Try
 
     End Sub
+    Public Shared Sub EjecutarVincularDatos(invApp As Inventor.Application)
+        Try
+            If invApp.ActiveDocument Is Nothing Then
+                MessageBox.Show("No hay ningún documento activo en Inventor.", "Vincular Datos", MessageBoxButtons.OK, MessageBoxIcon.Exclamation)
+                Exit Sub
+            End If
+
+            If invApp.ActiveDocument.DocumentType <> DocumentTypeEnum.kDrawingDocumentObject Then
+                MessageBox.Show("Esta función solo se puede ejecutar en un documento de dibujo (.idw / .dwg).", "Vincular Datos", MessageBoxButtons.OK, MessageBoxIcon.Exclamation)
+                Exit Sub
+            End If
+
+            Dim drawDoc As DrawingDocument = CType(invApp.ActiveDocument, DrawingDocument)
+
+            ' Instanciar ventana de apertura de archivos de Windows (OpenFileDialog)
+            Dim selectedFilePath As String = ""
+            Using ofd As New OpenFileDialog()
+                ofd.Title = "Seleccionar archivo (Pieza o Ensamblaje) para vincular N° de pieza"
+                ofd.Filter = "Modelos de Inventor (*.iam;*.ipt)|*.iam;*.ipt|Ensamblajes de Inventor (*.iam)|*.iam|Piezas de Inventor (*.ipt)|*.ipt|Todos los archivos (*.*)|*.*"
+                ofd.FilterIndex = 1
+                ofd.CheckFileExists = True
+                ofd.Multiselect = False
+                ofd.RestoreDirectory = True
+
+                ' Definir carpeta inicial según el dibujo activo o el proyecto de Inventor
+                If Not String.IsNullOrEmpty(drawDoc.FullFileName) Then
+                    Try
+                        ofd.InitialDirectory = IOPath.GetDirectoryName(drawDoc.FullFileName)
+                    Catch
+                    End Try
+                Else
+                    Try
+                        If invApp.DesignProjectManager IsNot Nothing AndAlso
+                           invApp.DesignProjectManager.ActiveDesignProject IsNot Nothing Then
+                            ofd.InitialDirectory = invApp.DesignProjectManager.ActiveDesignProject.WorkspacePath
+                        End If
+                    Catch
+                    End Try
+                End If
+
+                Dim hwnd As IntPtr = IntPtr.Zero
+                Try
+                    hwnd = New IntPtr(invApp.MainFrameHWND)
+                Catch
+                End Try
+
+                Dim res As DialogResult
+                If hwnd <> IntPtr.Zero Then
+                    res = ofd.ShowDialog(New WindowWrapper(hwnd))
+                Else
+                    res = ofd.ShowDialog()
+                End If
+
+                If res <> DialogResult.OK OrElse String.IsNullOrWhiteSpace(ofd.FileName) Then
+                    Exit Sub
+                End If
+
+                selectedFilePath = ofd.FileName
+            End Using
+
+            If Not IOFile.Exists(selectedFilePath) Then
+                MessageBox.Show("El archivo seleccionado no existe.", "Vincular Datos", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Exit Sub
+            End If
+
+            ' Verificar si el archivo ya está abierto en Inventor
+            Dim modelDoc As Document = Nothing
+            Dim openedInvisibly As Boolean = False
+
+            For Each d As Document In invApp.Documents
+                If String.Equals(d.FullFileName, selectedFilePath, StringComparison.OrdinalIgnoreCase) Then
+                    modelDoc = d
+                    Exit For
+                End If
+            Next
+
+            ' Si no está abierto en la sesión, abrirlo de forma invisible
+            If modelDoc Is Nothing Then
+                Try
+                    modelDoc = invApp.Documents.Open(selectedFilePath, False)
+                    openedInvisibly = True
+                Catch ex As Exception
+                    MessageBox.Show("No se pudo abrir el archivo en Inventor:" & vbCrLf & ex.Message, "Error al abrir archivo", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                    Exit Sub
+                End Try
+            End If
+
+            ' Obtener el N° de pieza (Part Number) de las iProperties del modelo
+            Dim modelPartNumber As String = GetPropertyFromDoc(modelDoc, "Part Number")
+
+            ' Si abrimos el archivo temporalmente de forma invisible, cerrarlo para no dejarlo abierto en memoria
+            If openedInvisibly AndAlso modelDoc IsNot Nothing Then
+                Try
+                    modelDoc.Close(True)
+                Catch
+                End Try
+            End If
+
+            ' Si el N° de pieza está vacío, advertir al usuario
+            If String.IsNullOrWhiteSpace(modelPartNumber) Then
+                Dim resp As DialogResult = MessageBox.Show(
+                    "El archivo seleccionado '" & IOPath.GetFileName(selectedFilePath) & "' no tiene un N° de pieza definido (está vacío)." & vbCrLf & vbCrLf &
+                    "¿Desea asignar un valor vacío al N° de pieza del dibujo?",
+                    "N° de Pieza Vacío",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question)
+                If resp <> DialogResult.Yes Then
+                    Exit Sub
+                End If
+            End If
+
+            ' Asignar el N° de pieza en las iProperties del dibujo activo
+            SetPropertyInDoc(drawDoc, "Description", modelPartNumber)
+
+            ' Actualizar el dibujo para reflejar el cambio en cajetín/rótulo
+            Try
+                drawDoc.Update2(True)
+            Catch
+                Try
+                    drawDoc.Update()
+                Catch
+                End Try
+            End Try
+
+            MessageBox.Show(
+                "N° de pieza vinculado con éxito al dibujo:" & vbCrLf & vbCrLf &
+                "• Archivo de origen: " & IOPath.GetFileName(selectedFilePath) & vbCrLf &
+                "• N° de pieza asignado: " & modelPartNumber,
+                "Vincular Datos",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information)
+
+        Catch ex As Exception
+            MessageBox.Show("Error en Vincular Datos: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
     Public Shared Sub EjecutarTraerCantidades(
    invApp As Inventor.Application)
 
@@ -489,28 +626,54 @@ Public Class Rules
     ' === HELPERS PARA LEER/ESCRIBIR PROPIEDADES ===
     Private Shared Function GetPropertyFromDoc(doc As Document, propName As String) As String
         Try
-            Return doc.PropertySets.Item("Inventor User Defined Properties").Item(propName).Value.ToString()
+            Return doc.PropertySets.Item("Design Tracking Properties").Item(propName).Value.ToString()
         Catch
             Try
-                Return doc.PropertySets.Item("Design Tracking Properties").Item(propName).Value.ToString()
+                Return doc.PropertySets.Item("Inventor Summary Information").Item(propName).Value.ToString()
             Catch
-                Return ""
+                Try
+                    Return doc.PropertySets.Item("Inventor User Defined Properties").Item(propName).Value.ToString()
+                Catch
+                    Return ""
+                End Try
             End Try
         End Try
     End Function
 
     Private Shared Sub SetPropertyInDoc(doc As Document, propName As String, value As String)
+        ' 1. Intentar en Design Tracking Properties (donde reside normalmente Part Number, Stock Number, etc.)
         Try
-            Dim props As PropertySet = doc.PropertySets.Item("Inventor User Defined Properties")
-            Dim prop As Inventor.Property = Nothing
+            Dim propsDT As PropertySet = doc.PropertySets.Item("Design Tracking Properties")
+            Dim propDT As Inventor.Property = propsDT.Item(propName)
+            If propDT IsNot Nothing Then
+                propDT.Value = value
+                Return
+            End If
+        Catch
+        End Try
+
+        ' 2. Intentar en Inventor Summary Information (Title, Subject, Author, etc.)
+        Try
+            Dim propsSI As PropertySet = doc.PropertySets.Item("Inventor Summary Information")
+            Dim propSI As Inventor.Property = propsSI.Item(propName)
+            If propSI IsNot Nothing Then
+                propSI.Value = value
+                Return
+            End If
+        Catch
+        End Try
+
+        ' 3. Si no es estándar o no existe, escribir o agregar a Inventor User Defined Properties
+        Try
+            Dim propsUser As PropertySet = doc.PropertySets.Item("Inventor User Defined Properties")
+            Dim propUser As Inventor.Property = Nothing
             Try
-                prop = props.Item(propName)
+                propUser = propsUser.Item(propName)
             Catch
-                ' La propiedad no existe, crearla
-                prop = props.Add(value, propName)
+                propUser = propsUser.Add(value, propName)
             End Try
-            If prop IsNot Nothing Then
-                prop.Value = value
+            If propUser IsNot Nothing Then
+                propUser.Value = value
             End If
         Catch ex As Exception
             Throw New Exception("No se pudo escribir la propiedad '" & propName & "': " & ex.Message)

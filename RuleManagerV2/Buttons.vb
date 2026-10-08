@@ -113,7 +113,7 @@ Public Class Buttons
         ' =====================================================
 
         _buttonsData.Add(New ButtonData(
-            "Selección Base",
+            "1) SELECCION BASE",
             "BTN_SEL_BASE",
             "SELECCION BASE",
             "Part",
@@ -121,7 +121,7 @@ Public Class Buttons
             "icon_ipt_sel_base_32x32.png"))
 
         _buttonsData.Add(New ButtonData(
-            "Asignar propiedades de pieza",
+            "2) PROP ASIGN PART",
             "BTN_PROP_PART",
             "PROP ASIGN PART",
             "Part",
@@ -132,6 +132,14 @@ Public Class Buttons
         ' =====================================================
         ' IDW
         ' =====================================================
+
+        _buttonsData.Add(New ButtonData(
+            "Vincular Datos",
+            "BTN_VINCULAR_DATOS",
+            "Abre el explorador de archivos para seleccionar una pieza o ensamblaje y vincular su N° de pieza al dibujo.",
+            "Drawing",
+            AddressOf Rules.EjecutarVincularDatos,
+            "icon_0_vincular_datos_32x32.png"))
 
         _buttonsData.Add(New ButtonData(
             "Traer Cantidades",
@@ -220,11 +228,6 @@ Public Class Buttons
             "Drawing",
             AddressOf Rules.EjecutarPrintB3EXTWIDE,
             "icon_10_print_b3_ext_wide_32x32.png"))
-
-        ' =====================================================
-        ' IDW
-        ' =====================================================
-
 
         _buttonsData.Add(New ButtonData(
             "Organizar Proyecto",
