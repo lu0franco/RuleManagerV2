@@ -26,6 +26,16 @@ Public Class RenombradorComponentes
     Private _hasRoutedSystems As Boolean = False
     Private _routedSystemPaths As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
     Private _protectedPaths As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+    Private _customNewNames As Dictionary(Of String, String) = Nothing
+
+    Public Property NombresPersonalizados As Dictionary(Of String, String)
+        Get
+            Return _customNewNames
+        End Get
+        Set(value As Dictionary(Of String, String))
+            _customNewNames = value
+        End Set
+    End Property
 
     Public Event ProgresoReportado(mensaje As String)
     Public Event ProcesoFinalizado(procesados As Integer, omitidos As Integer, errores As Integer, log As String)
@@ -34,8 +44,11 @@ Public Class RenombradorComponentes
         oApp = invApp
     End Sub
 
-    Public Sub Ejecutar(ByVal sAsmOriginalPath As String, ByVal sPrefix As String, ByVal dryRun As Boolean)
+    Public Sub Ejecutar(ByVal sAsmOriginalPath As String, ByVal sPrefix As String, ByVal dryRun As Boolean, Optional ByVal customNames As Dictionary(Of String, String) = Nothing)
         bDryRun = dryRun
+        If customNames IsNot Nothing Then
+            _customNewNames = customNames
+        End If
         iProcessed = 0
         iSkipped = 0
         iErrors = 0
@@ -124,7 +137,20 @@ Public Class RenombradorComponentes
                         Continue For
                     End If
 
-                    Dim sBaseNewName As String = BuildNewName(oDoc, sPrefix)
+                    Dim sBaseNewName As String = ""
+                    If _customNewNames IsNot Nothing AndAlso _customNewNames.ContainsKey(sOriginalPath) Then
+                        sBaseNewName = _customNewNames(sOriginalPath)
+                    Else
+                        sBaseNewName = BuildNewName(oDoc, sPrefix)
+                    End If
+
+                    If Not String.IsNullOrEmpty(sBaseNewName) Then
+                        If sBaseNewName.EndsWith(".ipt", StringComparison.OrdinalIgnoreCase) OrElse sBaseNewName.EndsWith(".iam", StringComparison.OrdinalIgnoreCase) Then
+                            sBaseNewName = IOPath.GetFileNameWithoutExtension(sBaseNewName)
+                        End If
+                        sBaseNewName = CleanFileName(sBaseNewName, False)
+                    End If
+
                     If String.IsNullOrEmpty(sBaseNewName) Then
                         iSkipped += 1
                         _renamedFiles.Add(sOriginalPath, sOriginalPath)
@@ -1260,85 +1286,30 @@ Public Class RenombradorComponentes
             Return CleanFileName(sPartNumber, True)
         End If
 
-        Dim sStockNumber As String = GetPropertyValue(oDoc, "Stock Number")
+        ' Para piezas y ensamblajes solo interesa pasar el Part Number para el rename
         Dim sPartNumberStd As String = GetPropertyValue(oDoc, "Part Number")
-
-        If String.IsNullOrEmpty(sStockNumber) Then
-            sStockNumber = GetCustomPropertyValue(oDoc, "Stock Number")
-        End If
         If String.IsNullOrEmpty(sPartNumberStd) Then
             sPartNumberStd = GetCustomPropertyValue(oDoc, "Part Number")
         End If
 
-        If String.IsNullOrEmpty(sStockNumber) Then
-            sStockNumber = sPrefix
-        End If
-
-        If String.IsNullOrEmpty(sStockNumber) AndAlso String.IsNullOrEmpty(sPartNumberStd) Then
+        If String.IsNullOrEmpty(sPartNumberStd) Then
             Return ""
         End If
 
-        Dim sFinalName As String = ""
-
-        ' If Not String.IsNullOrEmpty(sStockNumber) AndAlso Not String.IsNullOrEmpty(sPartNumberStd) Then
-        'sFinalName = sStockNumber & " - " & sPartNumberStd
-        sFinalName = sPartNumberStd
-        ' ElseIf Not String.IsNullOrEmpty(sStockNumber) Then
-        '    sFinalName = sStockNumber
-        'Else
-        '   sFinalName = sPartNumberStd
-        ' End If
-
-        Return CleanFileName(sFinalName, False)
+        Return CleanFileName(sPartNumberStd, False)
     End Function
 
     Private Function BuildMainAssemblyName(ByVal oDoc As Document, ByVal sPrefix As String) As String
-        Dim sStockNumber As String = GetPropertyValue(oDoc, "Stock Number")
         Dim sPartNumber As String = GetPropertyValue(oDoc, "Part Number")
-        Dim sProject As String = GetPropertyValue(oDoc, "Project")
-        Dim sVendor As String = GetPropertyValue(oDoc, "Vendor")
-
-        If String.IsNullOrEmpty(sStockNumber) Then
-            sStockNumber = GetCustomPropertyValue(oDoc, "Stock Number")
-        End If
         If String.IsNullOrEmpty(sPartNumber) Then
             sPartNumber = GetCustomPropertyValue(oDoc, "Part Number")
         End If
-        If String.IsNullOrEmpty(sProject) Then
-            sProject = GetCustomPropertyValue(oDoc, "Project")
-        End If
-        If String.IsNullOrEmpty(sVendor) Then
-            sVendor = GetCustomPropertyValue(oDoc, "Vendor")
-        End If
 
-        If String.IsNullOrEmpty(sStockNumber) Then
-            sStockNumber = sPrefix
-        End If
-
-        If String.IsNullOrEmpty(sStockNumber) AndAlso String.IsNullOrEmpty(sPartNumber) _
-           AndAlso String.IsNullOrEmpty(sProject) AndAlso String.IsNullOrEmpty(sVendor) Then
+        If String.IsNullOrEmpty(sPartNumber) Then
             Return ""
         End If
 
-        Dim parts As New List(Of String)
-
-        If Not String.IsNullOrEmpty(sStockNumber) Then
-            parts.Add(sStockNumber)
-        End If
-        If Not String.IsNullOrEmpty(sPartNumber) Then
-            parts.Add(sPartNumber)
-        End If
-        If Not String.IsNullOrEmpty(sProject) Then
-            parts.Add(sProject)
-        End If
-        If Not String.IsNullOrEmpty(sVendor) Then
-            parts.Add(sVendor)
-        End If
-
-        'Dim sFinalName As String = String.Join(" - ", parts)
-
-        Dim sFinalName As String = sPartNumber
-        Return CleanFileName(sFinalName, False)
+        Return CleanFileName(sPartNumber, False)
     End Function
 
     Private Function GetPropertyValue(ByVal oDoc As Document, ByVal sPropName As String) As String
@@ -1369,7 +1340,9 @@ Public Class RenombradorComponentes
             sResult = sResult.Replace(c, "-"c)
         Next
 
-        sResult = sResult.Replace("Ø", "DIA").Replace("Æ", "AE").Replace("Ñ", "N")
+        sResult = sResult.Replace("Ø", "DIA").Replace("Æ", "AE")
+        'sResult = sResult.Replace("Ø", "DIA").Replace("Æ", "AE").Replace("Ñ", "N")
+
 
         If bAggressive Then
             Dim aggressiveChars() As Char = {","c, "."c, ";"c, "="c, "+"c, "@"c, "#"c, "$"c, "%"c, "&"c, "'"c, "("c, ")"c, "["c, "]"c, "{"c, "}"c, "<"c, ">"c}
@@ -1395,7 +1368,20 @@ Public Class RenombradorComponentes
 
     Private Sub ProcessMainAssembly(ByVal oAsmDoc As AssemblyDocument, ByVal sPrefix As String, ByVal sAsmOriginalPath As String)
         Try
-            Dim sNewName As String = BuildMainAssemblyName(oAsmDoc, sPrefix)
+            Dim sNewName As String = ""
+            If _customNewNames IsNot Nothing AndAlso _customNewNames.ContainsKey(sAsmOriginalPath) Then
+                sNewName = _customNewNames(sAsmOriginalPath)
+            Else
+                sNewName = BuildMainAssemblyName(oAsmDoc, sPrefix)
+            End If
+
+            If Not String.IsNullOrEmpty(sNewName) Then
+                If sNewName.EndsWith(".iam", StringComparison.OrdinalIgnoreCase) Then
+                    sNewName = IOPath.GetFileNameWithoutExtension(sNewName)
+                End If
+                sNewName = CleanFileName(sNewName, False)
+            End If
+
             If String.IsNullOrEmpty(sNewName) Then Return
 
             Dim sFolder As String = IOPath.GetDirectoryName(sAsmOriginalPath)

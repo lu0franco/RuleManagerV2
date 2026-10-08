@@ -103,7 +103,7 @@ Public Class Buttons
         _buttonsData.Add(New ButtonData(
             "Renombrar Componentes",
             "BTN_RENOMBRAR_COMP",
-            "Renombra automáticamente las piezas y ensamblajes del modelo según Part Number y Stock Number.",
+            "Revisa y renombra las piezas y ensamblajes según su Part Number mediante una ventana interactiva.",
             "Assembly",
             AddressOf Rules.EjecutarRenombrarComponentes,
             "icon_renombrar_comp_32x32.png"))

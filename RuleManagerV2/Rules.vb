@@ -714,11 +714,37 @@ Public Class Rules
                 sPrefijo = "PROY" ' Prefijo por defecto si la iProperty de Proyecto está vacía
             End If
 
-            ' 6. Instanciar la clase y correrla pasándole los datos dinámicos del documento activo
-            Dim renamer As New RenombradorComponentes(invApp)
+            ' 6. Recopilar componentes a revisar y mostrar la ventana interactiva
+            Dim items As List(Of ComponenteRenombrarItem) = RenombrarComponentesDialog.RecopilarItems(invApp, oAsmDoc, sPrefijo)
+            If items Is Nothing OrElse items.Count = 0 Then
+                MsgBox("No se encontraron piezas o ensamblajes para renombrar en este modelo.", MsgBoxStyle.Information, "Renombrar Componentes")
+                Exit Sub
+            End If
 
-            ' Parámetros: Ruta activa, Prefijo detectado, dryRun (False para que ejecute los cambios reales)
-            renamer.Ejecutar(sRutaActiva, sPrefijo, False)
+            Using dlg As New RenombrarComponentesDialog(invApp, items, sPrefijo)
+                Dim hwnd As IntPtr = IntPtr.Zero
+                Try
+                    hwnd = New IntPtr(invApp.MainFrameHWND)
+                Catch
+                End Try
+
+                Dim result As DialogResult
+                If hwnd <> IntPtr.Zero Then
+                    result = dlg.ShowDialog(New WindowWrapper(hwnd))
+                Else
+                    result = dlg.ShowDialog()
+                End If
+
+                ' 7. Si el usuario cancela, no realizar ningún cambio
+                If result <> DialogResult.OK Then
+                    Exit Sub
+                End If
+
+                ' 8. El usuario presionó Aplicar: ejecutar con los nombres personalizados y sugeridos
+                Dim customNames As Dictionary(Of String, String) = dlg.ObtenerNombresPersonalizados()
+                Dim renamer As New RenombradorComponentes(invApp)
+                renamer.Ejecutar(sRutaActiva, sPrefijo, False, customNames)
+            End Using
 
         Catch ex As Exception
             MsgBox("Error en Renombrar Componentes: " & ex.Message, MsgBoxStyle.Critical, "Error")
