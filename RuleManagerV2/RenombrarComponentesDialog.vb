@@ -636,28 +636,104 @@ Public Class RenombrarComponentesDialog
     End Sub
 
     Public Sub AbrirElemento(item As ComponenteRenombrarItem)
-        If item Is Nothing OrElse String.IsNullOrEmpty(item.DocumentPath) OrElse _invApp Is Nothing Then Return
-        Try
-            If Not IOFile.Exists(item.DocumentPath) Then
-                MessageBox.Show("El archivo no existe en disco:" & vbCrLf & item.DocumentPath, "Archivo no encontrado", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                Return
-            End If
+        If item Is Nothing OrElse _invApp Is Nothing Then Return
 
-            Dim docExistente As Document = Nothing
+        Dim ruta As String = item.DocumentPath
+        If String.IsNullOrEmpty(ruta) AndAlso item.Document IsNot Nothing Then
+            Try
+                ruta = item.Document.FullFileName
+                If String.IsNullOrEmpty(ruta) Then ruta = item.Document.FullDocumentName
+            Catch
+            End Try
+        End If
+
+        If String.IsNullOrEmpty(ruta) AndAlso item.Occurrence IsNot Nothing AndAlso item.Occurrence.Definition IsNot Nothing Then
+            Try
+                Dim defDoc As Document = item.Occurrence.Definition.Document
+                If defDoc IsNot Nothing Then
+                    ruta = defDoc.FullFileName
+                    If String.IsNullOrEmpty(ruta) Then ruta = defDoc.FullDocumentName
+                End If
+            Catch
+            End Try
+        End If
+
+        If String.IsNullOrEmpty(ruta) Then
+            MessageBox.Show("No se encontró la ruta del archivo del elemento seleccionado.", "Ruta no disponible", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return
+        End If
+
+        If Not IOFile.Exists(ruta) Then
+            MessageBox.Show("El archivo no existe en disco:" & vbCrLf & ruta, "Archivo no encontrado", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return
+        End If
+
+        ' ESTRATEGIA 1: Si el documento ya tiene una ventana visible abierta en Inventor, activarla
+        Try
             For Each d As Document In _invApp.Documents
-                If String.Equals(d.FullFileName, item.DocumentPath, StringComparison.OrdinalIgnoreCase) Then
-                    docExistente = d
+                If String.Equals(d.FullFileName, ruta, StringComparison.OrdinalIgnoreCase) Then
+                    If d.Views IsNot Nothing AndAlso d.Views.Count > 0 Then
+                        Try
+                            d.Views.Item(1).Activate()
+                            Return
+                        Catch
+                            Try
+                                d.Activate()
+                                Return
+                            Catch
+                            End Try
+                        End Try
+                    End If
                     Exit For
                 End If
             Next
+        Catch
+        End Try
 
-            If docExistente IsNot Nothing Then
-                docExistente.Activate()
-            Else
-                _invApp.Documents.Open(item.DocumentPath, True)
+        ' ESTRATEGIA 2: Abrir con la API de Inventor usando SilentOperation para evitar bloqueos de diálogos internos
+        Dim bSilentOriginal As Boolean = False
+        Dim cambioSilent As Boolean = False
+        Try
+            Try
+                bSilentOriginal = _invApp.SilentOperation
+                _invApp.SilentOperation = True
+                cambioSilent = True
+            Catch
+            End Try
+
+            Dim docAbierto As Document = _invApp.Documents.Open(ruta, True)
+            If docAbierto IsNot Nothing Then
+                If docAbierto.Views IsNot Nothing AndAlso docAbierto.Views.Count > 0 Then
+                    Try
+                        docAbierto.Views.Item(1).Activate()
+                    Catch
+                    End Try
+                End If
+                Return
             End If
-        Catch ex As Exception
-            MessageBox.Show("No se pudo abrir el elemento: " & ex.Message, "Error al abrir", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Catch exCom As Exception
+            ' Si falla la llamada directa de la API COM (típico en estado modal o bloqueo de vistas con E_FAIL 0x80004005),
+            ' pasamos a la Estrategia 3 como fallback infalible.
+        Finally
+            If cambioSilent Then
+                Try
+                    _invApp.SilentOperation = bSilentOriginal
+                Catch
+                End Try
+            End If
+        End Try
+
+        ' ESTRATEGIA 3: Fallback mediante Shell de Windows (Process.Start)
+        ' Al ejecutarse vía ShellExecute, Windows pasa la orden al proceso de Inventor ya abierto
+        ' abriendo el archivo en una nueva pestaña sin pasar por las restricciones modales de COM.
+        Try
+            Dim psi As New System.Diagnostics.ProcessStartInfo() With {
+                .FileName = ruta,
+                .UseShellExecute = True
+            }
+            System.Diagnostics.Process.Start(psi)
+        Catch exShell As Exception
+            MessageBox.Show("No se pudo abrir el elemento: " & exShell.Message, "Error al abrir", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 

@@ -33,19 +33,10 @@ Public Class Rules
         invApp As Inventor.Application)
 
         Try
-
-            Dim iLogicAuto As Object =
-                GetILogic(invApp)
-
-            iLogicAuto.RunExternalRule(
-                invApp.ActiveDocument,
-                "D:\Bibliotecas\Ilogic\Reglas\IAM\PropAsign3.iLogicVb"
-            )
-
+            Dim engine As New PropAsignEngine(invApp)
+            engine.Ejecutar()
         Catch ex As Exception
-
-            MsgBox(ex.ToString)
-
+            MessageBox.Show("Error en Asignar Propiedades: " & ex.Message, "Error - Asignar Propiedades", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
 
     End Sub
