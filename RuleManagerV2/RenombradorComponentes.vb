@@ -281,11 +281,18 @@ Public Class RenombradorComponentes
     ' DETECCIÓN DE ROUTED SYSTEMS
     ' ═══════════════════════════════════════════════════════════════════════════════
 
-    Private Sub DetectarRoutedSystemsRecursivo(ByVal occs As ComponentOccurrences, ByVal parentRoutedPath As String)
+    Private Sub DetectarRoutedSystemsRecursivo(ByVal occs As Object, ByVal parentRoutedPath As String)
         If occs Is Nothing Then Return
+        Dim enumerable As System.Collections.IEnumerable = TryCast(occs, System.Collections.IEnumerable)
+        If enumerable Is Nothing Then Return
 
-        For Each oOcc As ComponentOccurrence In occs
+        For Each item In enumerable
+            Dim oOcc As ComponentOccurrence = TryCast(item, ComponentOccurrence)
             If oOcc Is Nothing Then Continue For
+
+            Dim isSuppressed As Boolean = False
+            Try : isSuppressed = oOcc.Suppressed : Catch : isSuppressed = False : End Try
+            If isSuppressed Then Continue For
 
             Dim oDoc As Document = Nothing
             If Not TryGetDocumentFromOcc(oOcc, oDoc) OrElse oDoc Is Nothing Then
@@ -298,7 +305,7 @@ Public Class RenombradorComponentes
             If Not String.IsNullOrEmpty(parentRoutedPath) Then
                 _routedSystemPaths.Add(sPath)
                 If oOcc.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
-                    Dim subOccs As ComponentOccurrences = Nothing
+                    Dim subOccs As Object = Nothing
                     Try : subOccs = oOcc.SubOccurrences : Catch : subOccs = Nothing : End Try
                     If subOccs IsNot Nothing Then
                         DetectarRoutedSystemsRecursivo(subOccs, parentRoutedPath)
@@ -314,7 +321,7 @@ Public Class RenombradorComponentes
                 RegistrarLog("   🔒 Routed System detectado: " & IOPath.GetFileName(sPath))
 
                 If oOcc.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
-                    Dim subOccs As ComponentOccurrences = Nothing
+                    Dim subOccs As Object = Nothing
                     Try : subOccs = oOcc.SubOccurrences : Catch : subOccs = Nothing : End Try
                     If subOccs IsNot Nothing Then
                         DetectarRoutedSystemsRecursivo(subOccs, sPath)
@@ -323,7 +330,7 @@ Public Class RenombradorComponentes
             Else
                 ' No es routed system, pero seguir buscando en sus hijos
                 If oOcc.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
-                    Dim subOccs As ComponentOccurrences = Nothing
+                    Dim subOccs As Object = Nothing
                     Try : subOccs = oOcc.SubOccurrences : Catch : subOccs = Nothing : End Try
                     If subOccs IsNot Nothing Then
                         DetectarRoutedSystemsRecursivo(subOccs, Nothing)
@@ -1127,21 +1134,42 @@ Public Class RenombradorComponentes
         Return nivel
     End Function
 
-    Private Sub ObtenerOcurrenciasRecursivas(ByVal occs As ComponentOccurrences, ByRef lista As List(Of ComponentOccurrence))
+    Private Sub ObtenerOcurrenciasRecursivas(ByVal occs As Object, ByRef lista As List(Of ComponentOccurrence))
         If occs Is Nothing Then Return
+        Dim enumerable As System.Collections.IEnumerable = TryCast(occs, System.Collections.IEnumerable)
+        If enumerable Is Nothing Then Return
 
-        For Each oOcc As ComponentOccurrence In occs
+        For Each item In enumerable
+            Dim oOcc As ComponentOccurrence = TryCast(item, ComponentOccurrence)
             If oOcc Is Nothing Then Continue For
 
             Try
+                Dim isSuppressed As Boolean = False
+                Try : isSuppressed = oOcc.Suppressed : Catch : isSuppressed = False : End Try
+                If isSuppressed Then Continue For
+
                 lista.Add(oOcc)
 
-                If Not oOcc.Suppressed AndAlso oOcc.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
-                    Dim subOccs As ComponentOccurrences = Nothing
+                Dim isAsm As Boolean = False
+                Try
+                    isAsm = (oOcc.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject)
+                Catch
+                    Try
+                        isAsm = (oOcc.Definition.Document.DocumentType = DocumentTypeEnum.kAssemblyDocumentObject)
+                    Catch
+                    End Try
+                End Try
+
+                If isAsm Then
+                    Dim subOccs As Object = Nothing
                     Try : subOccs = oOcc.SubOccurrences : Catch : subOccs = Nothing : End Try
 
-                    If subOccs IsNot Nothing AndAlso subOccs.Count > 0 Then
-                        ObtenerOcurrenciasRecursivas(subOccs, lista)
+                    If subOccs IsNot Nothing Then
+                        Dim count As Integer = 0
+                        Try : count = CInt(CallByName(subOccs, "Count", CallType.Get)) : Catch : count = 1 : End Try
+                        If count > 0 Then
+                            ObtenerOcurrenciasRecursivas(subOccs, lista)
+                        End If
                     End If
                 End If
             Catch
@@ -1340,9 +1368,7 @@ Public Class RenombradorComponentes
             sResult = sResult.Replace(c, "-"c)
         Next
 
-        sResult = sResult.Replace("Ø", "DIA").Replace("Æ", "AE")
-        'sResult = sResult.Replace("Ø", "DIA").Replace("Æ", "AE").Replace("Ñ", "N")
-
+        sResult = sResult.Replace("Ø", "DIA").Replace("Æ", "AE").Replace("Ñ", "N")
 
         If bAggressive Then
             Dim aggressiveChars() As Char = {","c, "."c, ";"c, "="c, "+"c, "@"c, "#"c, "$"c, "%"c, "&"c, "'"c, "("c, ")"c, "["c, "]"c, "{"c, "}"c, "<"c, ">"c}

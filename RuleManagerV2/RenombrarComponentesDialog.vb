@@ -2,11 +2,14 @@ Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.IO
+Imports System.Runtime.InteropServices
 Imports System.Windows.Forms
 Imports Inventor
 
 Imports IOPath = System.IO.Path
 Imports IOFile = System.IO.File
+Imports Color = System.Drawing.Color
+Imports Point = System.Drawing.Point
 
 ''' <summary>
 ''' Representa un elemento (pieza o ensamblaje) para la revisión y asignación de nombres por Part Number.
@@ -27,7 +30,7 @@ Public Class ComponenteRenombrarItem
 
     Public ReadOnly Property ColumnaPiezaStock As String
         Get
-            Dim tipoStr As String = If(IsRootAssembly, "[Raíz]", If(IsAssembly, "[Ensamblaje]", "[Pieza]"))
+            Dim tipoStr As String = If(IsRootAssembly, "[Raíz]", If(IsAssembly, "[Subensamblaje]", "[Pieza]"))
             If Not String.IsNullOrEmpty(StockNumber) Then
                 Return StockNumber & " " & tipoStr
             Else
@@ -70,9 +73,18 @@ End Class
 Public Class RenombrarComponentesDialog
     Inherits Form
 
+    <DllImport("user32.dll")>
+    Private Shared Function EnableWindow(hWnd As IntPtr, bEnable As Boolean) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function SetForegroundWindow(hWnd As IntPtr) As Boolean
+    End Function
+
     Private _invApp As Inventor.Application
     Private _items As List(Of ComponenteRenombrarItem)
     Private _prefix As String
+    Private _highlightSet As HighlightSet = Nothing
 
     Private _grid As DataGridView
     Private _cmbPiezas As ComboBox
@@ -120,44 +132,44 @@ Public Class RenombrarComponentesDialog
             .Dock = DockStyle.Top,
             .Height = 72,
             .Padding = New Padding(12, 8, 12, 8),
-            .BackColor = System.Drawing.Color.FromArgb(248, 250, 252)
+            .BackColor = Color.FromArgb(248, 250, 252)
         }
 
         Dim lblTitulo As New Label With {
             .Text = "Revisión y Asignación de Nombres a Componentes",
             .Font = New Font("Segoe UI", 10.0F, FontStyle.Bold),
-            .ForeColor = System.Drawing.Color.FromArgb(15, 23, 42),
-            .Location = New System.Drawing.Point(12, 8),
+            .ForeColor = Color.FromArgb(15, 23, 42),
+            .Location = New Point(12, 8),
             .AutoSize = True
         }
 
         Dim lblDesc As New Label With {
             .Text = "Verifique los nombres sugeridos basados en Part Number. Puede editar el campo 'Nombre Sugerido' directamente en la celda." & vbCrLf & "Haga doble clic en una fila o use los botones de la derecha para hacer zoom o abrir la pieza.",
-            .ForeColor = System.Drawing.Color.FromArgb(100, 116, 139),
-            .Location = New System.Drawing.Point(12, 28),
+            .ForeColor = Color.FromArgb(100, 116, 139),
+            .Location = New Point(12, 28),
             .AutoSize = True
         }
 
         _btnRestaurar = New Button With {
             .Text = "🔄 Restaurar Sugeridos Originales",
-            .Location = New System.Drawing.Point(680, 10),
+            .Location = New Point(680, 10),
             .Size = New Size(220, 26),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
-            .BackColor = System.Drawing.Color.White,
+            .BackColor = Color.White,
             .Font = New Font("Segoe UI", 8.5F)
         }
         AddHandler _btnRestaurar.Click, AddressOf OnRestaurarSugeridos
 
         Dim lblCmb As New Label With {
             .Text = "Buscar / Seleccionar:",
-            .Location = New System.Drawing.Point(530, 43),
+            .Location = New Point(530, 43),
             .AutoSize = True,
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
             .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold)
         }
 
         _cmbPiezas = New ComboBox With {
-            .Location = New System.Drawing.Point(680, 40),
+            .Location = New Point(680, 40),
             .Size = New Size(310, 24),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
             .DropDownStyle = ComboBoxStyle.DropDownList
@@ -178,100 +190,100 @@ Public Class RenombrarComponentesDialog
             .Width = 260,
             .Padding = New Padding(10),
             .AutoScroll = True,
-            .BackColor = System.Drawing.Color.FromArgb(241, 245, 249)
+            .BackColor = Color.FromArgb(241, 245, 249)
         }
 
         Dim grpPreview As New GroupBox With {
             .Text = "Detalle del Componente",
             .Dock = DockStyle.Fill,
             .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
-            .ForeColor = System.Drawing.Color.FromArgb(30, 41, 59)
+            .ForeColor = Color.FromArgb(30, 41, 59)
         }
 
         _picPreview = New PictureBox With {
-            .Location = New System.Drawing.Point(15, 22),
+            .Location = New Point(15, 22),
             .Size = New Size(210, 160),
             .SizeMode = PictureBoxSizeMode.Zoom,
             .BorderStyle = BorderStyle.FixedSingle,
-            .BackColor = System.Drawing.Color.White
+            .BackColor = Color.White
         }
 
         _lblTipo = New Label With {
-            .Location = New System.Drawing.Point(15, 190),
+            .Location = New Point(15, 190),
             .Size = New Size(210, 18),
             .Font = New Font("Segoe UI", 8.0F, FontStyle.Bold),
-            .ForeColor = System.Drawing.Color.FromArgb(71, 85, 105),
+            .ForeColor = Color.FromArgb(71, 85, 105),
             .Text = "Tipo: -"
         }
 
         _lblStockNumber = New Label With {
-            .Location = New System.Drawing.Point(15, 212),
+            .Location = New Point(15, 212),
             .Size = New Size(210, 32),
             .Font = New Font("Segoe UI", 8.0F),
             .Text = "Stock Number: -"
         }
 
         _lblPartNumber = New Label With {
-            .Location = New System.Drawing.Point(15, 246),
+            .Location = New Point(15, 246),
             .Size = New Size(210, 32),
             .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
-            .ForeColor = System.Drawing.Color.FromArgb(2, 132, 199),
+            .ForeColor = Color.FromArgb(2, 132, 199),
             .Text = "Part Number: -"
         }
 
         _lblActual = New Label With {
-            .Location = New System.Drawing.Point(15, 280),
+            .Location = New Point(15, 280),
             .Size = New Size(210, 32),
             .Font = New Font("Segoe UI", 8.0F),
-            .ForeColor = System.Drawing.Color.FromArgb(100, 116, 139),
+            .ForeColor = Color.FromArgb(100, 116, 139),
             .Text = "Archivo actual: -"
         }
 
         _lblNuevo = New Label With {
-            .Location = New System.Drawing.Point(15, 314),
+            .Location = New Point(15, 314),
             .Size = New Size(210, 36),
             .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
-            .ForeColor = System.Drawing.Color.FromArgb(16, 185, 129),
+            .ForeColor = Color.FromArgb(16, 185, 129),
             .Text = "Nuevo archivo: -"
         }
 
         _btnZoom = New Button With {
             .Text = "🔍 Hacer Zoom",
-            .Location = New System.Drawing.Point(15, 358),
+            .Location = New Point(15, 358),
             .Size = New Size(210, 32),
-            .BackColor = System.Drawing.Color.White,
+            .BackColor = Color.White,
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
-            .ForeColor = System.Drawing.Color.FromArgb(30, 41, 59),
+            .ForeColor = Color.FromArgb(30, 41, 59),
             .FlatStyle = FlatStyle.Flat
         }
         AddHandler _btnZoom.Click, AddressOf OnBtnZoomClick
 
         _btnAbrir = New Button With {
             .Text = "📂 Abrir Elemento",
-            .Location = New System.Drawing.Point(15, 396),
+            .Location = New Point(15, 396),
             .Size = New Size(210, 32),
-            .BackColor = System.Drawing.Color.White,
+            .BackColor = Color.White,
             .Font = New Font("Segoe UI", 9.0F),
-            .ForeColor = System.Drawing.Color.FromArgb(30, 41, 59),
+            .ForeColor = Color.FromArgb(30, 41, 59),
             .FlatStyle = FlatStyle.Flat
         }
         AddHandler _btnAbrir.Click, AddressOf OnBtnAbrirClick
 
         Dim lblTip As New Label With {
             .Text = "💡 Tip: Doble clic en una fila para hacer zoom directamente.",
-            .Location = New System.Drawing.Point(15, 436),
+            .Location = New Point(15, 436),
             .Size = New Size(210, 36),
             .Font = New Font("Segoe UI", 7.5F, FontStyle.Italic),
-            .ForeColor = System.Drawing.Color.FromArgb(148, 163, 184)
+            .ForeColor = Color.FromArgb(148, 163, 184)
         }
 
         ' Botones de acción directa en el panel lateral derecho
         _btnAplicarLateral = New Button With {
             .Text = "✔️ Aplicar y Renombrar",
-            .Location = New System.Drawing.Point(15, 478),
+            .Location = New Point(15, 478),
             .Size = New Size(210, 34),
-            .BackColor = System.Drawing.Color.FromArgb(2, 132, 199),
-            .ForeColor = System.Drawing.Color.White,
+            .BackColor = Color.FromArgb(2, 132, 199),
+            .ForeColor = Color.White,
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
@@ -281,15 +293,15 @@ Public Class RenombrarComponentesDialog
 
         _btnCancelarLateral = New Button With {
             .Text = "✖️ Cancelar",
-            .Location = New System.Drawing.Point(15, 518),
+            .Location = New Point(15, 518),
             .Size = New Size(210, 30),
-            .BackColor = System.Drawing.Color.White,
-            .ForeColor = System.Drawing.Color.FromArgb(51, 65, 85),
+            .BackColor = Color.White,
+            .ForeColor = Color.FromArgb(51, 65, 85),
             .Font = New Font("Segoe UI", 8.5F),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
-        _btnCancelarLateral.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(203, 213, 225)
+        _btnCancelarLateral.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225)
         AddHandler _btnCancelarLateral.Click, AddressOf OnCancelar
 
         grpPreview.Controls.Add(_picPreview)
@@ -312,21 +324,21 @@ Public Class RenombrarComponentesDialog
             .Dock = DockStyle.Bottom,
             .Height = 56,
             .Padding = New Padding(16, 8, 16, 8),
-            .BackColor = System.Drawing.Color.FromArgb(241, 245, 249)
+            .BackColor = Color.FromArgb(241, 245, 249)
         }
 
         Dim sepBottom As New Panel With {
             .Dock = DockStyle.Top,
             .Height = 1,
-            .BackColor = System.Drawing.Color.FromArgb(203, 213, 225)
+            .BackColor = Color.FromArgb(203, 213, 225)
         }
         pnlBottom.Controls.Add(sepBottom)
 
         _lblResumen = New Label With {
-            .Location = New System.Drawing.Point(16, 18),
+            .Location = New Point(16, 18),
             .AutoSize = True,
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
-            .ForeColor = System.Drawing.Color.FromArgb(51, 65, 85),
+            .ForeColor = Color.FromArgb(51, 65, 85),
             .Text = "Total componentes: 0"
         }
 
@@ -343,21 +355,21 @@ Public Class RenombrarComponentesDialog
         _btnCancelar = New Button With {
             .Text = "Cancelar",
             .Size = New Size(110, 34),
-            .BackColor = System.Drawing.Color.White,
-            .ForeColor = System.Drawing.Color.FromArgb(51, 65, 85),
+            .BackColor = Color.White,
+            .ForeColor = Color.FromArgb(51, 65, 85),
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand,
             .Margin = New Padding(10, 0, 0, 0)
         }
-        _btnCancelar.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(203, 213, 225)
+        _btnCancelar.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225)
         AddHandler _btnCancelar.Click, AddressOf OnCancelar
 
         _btnAplicar = New Button With {
             .Text = "Aplicar y Renombrar",
             .Size = New Size(170, 34),
-            .BackColor = System.Drawing.Color.FromArgb(2, 132, 199),
-            .ForeColor = System.Drawing.Color.White,
+            .BackColor = Color.FromArgb(2, 132, 199),
+            .ForeColor = Color.White,
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand,
@@ -373,8 +385,8 @@ Public Class RenombrarComponentesDialog
         pnlBottom.Controls.Add(_lblResumen)
 
         AddHandler pnlBottom.Resize, Sub(s, e)
-                                         _lblResumen.Top = (pnlBottom.ClientSize.Height - _lblResumen.Height) \ 2
-                                     End Sub
+                                        _lblResumen.Top = (pnlBottom.ClientSize.Height - _lblResumen.Height) \ 2
+                                    End Sub
 
         ' =========================================================
         ' CENTRO: DataGridView con las 4 columnas
@@ -386,7 +398,7 @@ Public Class RenombrarComponentesDialog
             .RowHeadersVisible = False,
             .SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             .MultiSelect = False,
-            .BackgroundColor = System.Drawing.Color.White,
+            .BackgroundColor = Color.White,
             .BorderStyle = BorderStyle.None,
             .AutoGenerateColumns = False,
             .EditMode = DataGridViewEditMode.EditOnEnter,
@@ -412,6 +424,13 @@ Public Class RenombrarComponentesDialog
         pnlTop.BringToFront()
         pnlRight.BringToFront()
         _grid.BringToFront()
+
+        AddHandler Me.Shown, Sub(s, e) HabilitarVentanaInventor()
+        AddHandler Me.Activated, Sub(s, e) HabilitarVentanaInventor()
+        AddHandler Me.FormClosing, Sub(s, e)
+                                       LimpiarResaltado()
+                                       HabilitarVentanaInventor()
+                                   End Sub
 
         Me.AcceptButton = _btnAplicar
         Me.CancelButton = _btnCancelar
@@ -450,9 +469,9 @@ Public Class RenombrarComponentesDialog
             .Width = 220,
             .DefaultCellStyle = New DataGridViewCellStyle With {
                 .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
-                .BackColor = System.Drawing.Color.FromArgb(254, 252, 232),
-                .SelectionBackColor = System.Drawing.Color.FromArgb(253, 224, 71),
-                .SelectionForeColor = System.Drawing.Color.Black
+                .BackColor = Color.FromArgb(254, 252, 232),
+                .SelectionBackColor = Color.FromArgb(253, 224, 71),
+                .SelectionForeColor = Color.Black
             }
         }
 
@@ -539,9 +558,9 @@ Public Class RenombrarComponentesDialog
         _lblNuevo.Text = "Nuevo archivo: " & item.SuggestedFileName
 
         If item.TieneCambio Then
-            _lblNuevo.ForeColor = System.Drawing.Color.FromArgb(16, 185, 129)
+            _lblNuevo.ForeColor = Color.FromArgb(16, 185, 129)
         Else
-            _lblNuevo.ForeColor = System.Drawing.Color.FromArgb(100, 116, 139)
+            _lblNuevo.ForeColor = Color.FromArgb(100, 116, 139)
         End If
     End Sub
 
@@ -581,16 +600,156 @@ Public Class RenombrarComponentesDialog
     End Function
 
     ' =========================================================
+    ' INTERACCIÓN CON INVENTOR Y RESALTADO CELESTE
+    ' =========================================================
+
+    Public Sub HabilitarVentanaInventor()
+        If _invApp IsNot Nothing Then
+            Try
+                Dim hwnd As New IntPtr(_invApp.MainFrameHWND)
+                If hwnd <> IntPtr.Zero Then
+                    EnableWindow(hwnd, True)
+                End If
+            Catch
+            End Try
+        End If
+    End Sub
+
+    Public Sub LimpiarResaltado()
+        If _highlightSet IsNot Nothing Then
+            Try
+                _highlightSet.Clear()
+            Catch
+            End Try
+            Try
+                _highlightSet.Delete()
+            Catch
+            End Try
+            _highlightSet = Nothing
+            Try
+                If _invApp IsNot Nothing AndAlso _invApp.ActiveView IsNot Nothing Then
+                    _invApp.ActiveView.Update()
+                End If
+            Catch
+            End Try
+        End If
+    End Sub
+
+    ''' <summary>
+    ''' Agrega una ocurrencia, sus subocurrencias y todos sus cuerpos sólidos (SurfaceBodies)
+    ''' al HighlightSet para asegurar que toda la geometría (de piezas o subensamblajes) se coloree en el visor 3D.
+    ''' </summary>
+    Private Sub AgregarOcurrenciaAHighlight(occ As ComponentOccurrence, hs As HighlightSet)
+        If occ Is Nothing OrElse hs Is Nothing Then Return
+        Try
+            hs.AddItem(occ)
+        Catch
+        End Try
+
+        Try
+            If occ.SurfaceBodies IsNot Nothing Then
+                For Each sb As SurfaceBody In occ.SurfaceBodies
+                    Try
+                        hs.AddItem(sb)
+                    Catch
+                    End Try
+                Next
+            End If
+        Catch
+        End Try
+
+        Try
+            Dim subOccs As Object = Nothing
+            Try : subOccs = occ.SubOccurrences : Catch : End Try
+            If subOccs IsNot Nothing Then
+                Dim enumerable As System.Collections.IEnumerable = TryCast(subOccs, System.Collections.IEnumerable)
+                If enumerable IsNot Nothing Then
+                    For Each rawSub In enumerable
+                        Dim subOcc As ComponentOccurrence = TryCast(rawSub, ComponentOccurrence)
+                        If subOcc IsNot Nothing Then
+                            Dim isSuppressed As Boolean = False
+                            Try : isSuppressed = subOcc.Suppressed : Catch : End Try
+                            If Not isSuppressed Then
+                                AgregarOcurrenciaAHighlight(subOcc, hs)
+                            End If
+                        End If
+                    Next
+                End If
+            End If
+        Catch
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Aplica una capa interactiva de color celeste vibrante sobre el componente en el visor 3D.
+    ''' </summary>
+    Public Sub ResaltarElemento(occ As ComponentOccurrence)
+        If occ Is Nothing OrElse _invApp Is Nothing Then
+            LimpiarResaltado()
+            Return
+        End If
+
+        Try
+            Dim doc As Document = _invApp.ActiveDocument
+            If doc Is Nothing Then Return
+
+            LimpiarResaltado()
+
+            ' 1. Obtener o crear HighlightSet en el documento (ensamblaje)
+            Dim asmDoc As AssemblyDocument = TryCast(doc, AssemblyDocument)
+            If asmDoc IsNot Nothing Then
+                Try
+                    _highlightSet = asmDoc.HighlightSets.Add()
+                Catch
+                    Try
+                        _highlightSet = asmDoc.HighlightSets.Item(1)
+                    Catch
+                    End Try
+                End Try
+            End If
+
+            If _highlightSet Is Nothing Then
+                Try
+                    _highlightSet = doc.CreateHighlightSet()
+                Catch
+                End Try
+            End If
+
+            If _highlightSet IsNot Nothing Then
+                ' Color celeste vibrante e interactivo (R: 0, G: 195, B: 255)
+                Dim colorCeleste As Inventor.Color = _invApp.TransientObjects.CreateColor(0, 195, 255)
+                Try
+                    colorCeleste.Opacity = 0.85
+                Catch
+                End Try
+                _highlightSet.Color = colorCeleste
+
+                ' Resaltar la ocurrencia, sus subocurrencias y cuerpos sólidos 3D
+                AgregarOcurrenciaAHighlight(occ, _highlightSet)
+            End If
+
+            ' Limpiar la selección de SelectSet para que no enmascare ni oculte el color celeste
+            Try
+                doc.SelectSet.Clear()
+            Catch
+            End Try
+
+            If _invApp.ActiveView IsNot Nothing Then
+                _invApp.ActiveView.Update()
+            End If
+        Catch
+        End Try
+    End Sub
+
+    ' =========================================================
     ' ACCIONES: ZOOM Y ABRIR ELEMENTO
     ' =========================================================
 
     Public Sub HacerZoom(item As ComponenteRenombrarItem)
         If item Is Nothing OrElse _invApp Is Nothing Then Return
         Try
-            Dim doc As Document = _invApp.ActiveDocument
-            If doc Is Nothing Then Return
-
             If item.IsRootAssembly OrElse item.Occurrence Is Nothing Then
+                LimpiarResaltado()
                 If _invApp.ActiveView IsNot Nothing Then
                     _invApp.ActiveView.Fit()
                     _invApp.ActiveView.Update()
@@ -599,11 +758,28 @@ Public Class RenombrarComponentesDialog
             End If
 
             Dim occ As ComponentOccurrence = item.Occurrence
+
+            ' Si el documento activo actual no es el ensamblaje contenedor de la ocurrencia, activarlo
             Try
-                doc.SelectSet.Clear()
-                doc.SelectSet.Select(occ)
+                Dim parentDoc As Document = Nothing
+                If occ.Parent IsNot Nothing Then
+                    Try : parentDoc = occ.Parent.Document : Catch : End Try
+                End If
+                If parentDoc IsNot Nothing AndAlso _invApp.ActiveDocument IsNot parentDoc Then
+                    If parentDoc.Views IsNot Nothing AndAlso parentDoc.Views.Count > 0 Then
+                        parentDoc.Views.Item(1).Activate()
+                    Else
+                        parentDoc.Activate()
+                    End If
+                End If
             Catch
             End Try
+
+            Dim doc As Document = _invApp.ActiveDocument
+            If doc Is Nothing Then Return
+
+            ' Aplicar capa interactiva de color celeste (HighlightSet)
+            ResaltarElemento(occ)
 
             Dim view As Inventor.View = _invApp.ActiveView
             If view IsNot Nothing Then
@@ -668,6 +844,11 @@ Public Class RenombrarComponentesDialog
             Return
         End If
 
+        ' Asegurar que Inventor quede completamente habilitado para interacción
+        HabilitarVentanaInventor()
+
+        Dim abiertoExitoso As Boolean = False
+
         ' ESTRATEGIA 1: Si el documento ya tiene una ventana visible abierta en Inventor, activarla
         Try
             For Each d As Document In _invApp.Documents
@@ -675,66 +856,83 @@ Public Class RenombrarComponentesDialog
                     If d.Views IsNot Nothing AndAlso d.Views.Count > 0 Then
                         Try
                             d.Views.Item(1).Activate()
-                            Return
+                            abiertoExitoso = True
+                            Exit For
                         Catch
                             Try
                                 d.Activate()
-                                Return
+                                abiertoExitoso = True
+                                Exit For
                             Catch
                             End Try
                         End Try
                     End If
-                    Exit For
                 End If
             Next
         Catch
         End Try
 
         ' ESTRATEGIA 2: Abrir con la API de Inventor usando SilentOperation para evitar bloqueos de diálogos internos
-        Dim bSilentOriginal As Boolean = False
-        Dim cambioSilent As Boolean = False
-        Try
+        If Not abiertoExitoso Then
+            Dim bSilentOriginal As Boolean = False
+            Dim cambioSilent As Boolean = False
             Try
-                bSilentOriginal = _invApp.SilentOperation
-                _invApp.SilentOperation = True
-                cambioSilent = True
-            Catch
-            End Try
+                Try
+                    bSilentOriginal = _invApp.SilentOperation
+                    _invApp.SilentOperation = True
+                    cambioSilent = True
+                Catch
+                End Try
 
-            Dim docAbierto As Document = _invApp.Documents.Open(ruta, True)
-            If docAbierto IsNot Nothing Then
-                If docAbierto.Views IsNot Nothing AndAlso docAbierto.Views.Count > 0 Then
+                Dim docAbierto As Document = _invApp.Documents.Open(ruta, True)
+                If docAbierto IsNot Nothing Then
+                    If docAbierto.Views IsNot Nothing AndAlso docAbierto.Views.Count > 0 Then
+                        Try
+                            docAbierto.Views.Item(1).Activate()
+                        Catch
+                        End Try
+                    End If
+                    abiertoExitoso = True
+                End If
+            Catch exCom As Exception
+                ' Si falla la llamada directa de la API COM, pasamos a la Estrategia 3 como fallback
+            Finally
+                If cambioSilent Then
                     Try
-                        docAbierto.Views.Item(1).Activate()
+                        _invApp.SilentOperation = bSilentOriginal
                     Catch
                     End Try
                 End If
-                Return
-            End If
-        Catch exCom As Exception
-            ' Si falla la llamada directa de la API COM (típico en estado modal o bloqueo de vistas con E_FAIL 0x80004005),
-            ' pasamos a la Estrategia 3 como fallback infalible.
-        Finally
-            If cambioSilent Then
-                Try
-                    _invApp.SilentOperation = bSilentOriginal
-                Catch
-                End Try
-            End If
-        End Try
+            End Try
+        End If
 
         ' ESTRATEGIA 3: Fallback mediante Shell de Windows (Process.Start)
-        ' Al ejecutarse vía ShellExecute, Windows pasa la orden al proceso de Inventor ya abierto
-        ' abriendo el archivo en una nueva pestaña sin pasar por las restricciones modales de COM.
-        Try
-            Dim psi As New System.Diagnostics.ProcessStartInfo() With {
-                .FileName = ruta,
-                .UseShellExecute = True
-            }
-            System.Diagnostics.Process.Start(psi)
-        Catch exShell As Exception
-            MessageBox.Show("No se pudo abrir el elemento: " & exShell.Message, "Error al abrir", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End Try
+        If Not abiertoExitoso Then
+            Try
+                Dim psi As New System.Diagnostics.ProcessStartInfo() With {
+                    .FileName = ruta,
+                    .UseShellExecute = True
+                }
+                System.Diagnostics.Process.Start(psi)
+                abiertoExitoso = True
+            Catch exShell As Exception
+                MessageBox.Show("No se pudo abrir el elemento: " & exShell.Message, "Error al abrir", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End Try
+        End If
+
+        ' Si se abrió con éxito, dar foco a la ventana principal de Inventor
+        ' para que el usuario pueda rotar, inspeccionar o editar el elemento directamente
+        ' sin necesidad de cerrar este diálogo.
+        If abiertoExitoso Then
+            HabilitarVentanaInventor()
+            Try
+                Dim hwnd As New IntPtr(_invApp.MainFrameHWND)
+                If hwnd <> IntPtr.Zero Then
+                    SetForegroundWindow(hwnd)
+                End If
+            Catch
+            End Try
+        End If
     End Sub
 
     ' =========================================================
@@ -800,6 +998,12 @@ Public Class RenombrarComponentesDialog
 
         If item IsNot Nothing AndAlso _cmbPiezas.SelectedItem IsNot item Then
             _cmbPiezas.SelectedItem = item
+        End If
+
+        If item IsNot Nothing AndAlso item.Occurrence IsNot Nothing Then
+            ResaltarElemento(item.Occurrence)
+        Else
+            LimpiarResaltado()
         End If
     End Sub
 
@@ -918,31 +1122,44 @@ Public Class RenombrarComponentesDialog
         Catch ex As Exception
         End Try
 
-        ' 2. Recorrer ocurrencias recursivamente
+        ' 2. Recorrer ocurrencias recursivamente (soporta subensamblajes y piezas en cualquier profundidad)
         Dim allOccs As New List(Of ComponentOccurrence)()
-        ObtenerOcurrenciasRecursivas(oAsmDoc.ComponentDefinition.Occurrences, allOccs)
+        Try
+            ObtenerOcurrenciasRecursivas(oAsmDoc.ComponentDefinition.Occurrences, allOccs)
+        Catch ex As Exception
+        End Try
 
         For Each occ As ComponentOccurrence In allOccs
             If occ Is Nothing Then Continue For
-            If occ.Suppressed Then Continue For
+
+            Dim isSuppressed As Boolean = False
+            Try
+                isSuppressed = occ.Suppressed
+            Catch
+                isSuppressed = False
+            End Try
+            If isSuppressed Then Continue For
 
             Try
                 Dim def As ComponentDefinition = occ.Definition
-                If def.BOMStructure = BOMStructureEnum.kPhantomBOMStructure OrElse def.BOMStructure = BOMStructureEnum.kReferenceBOMStructure Then
-                    Continue For
+                If def IsNot Nothing Then
+                    If def.BOMStructure = BOMStructureEnum.kPhantomBOMStructure OrElse def.BOMStructure = BOMStructureEnum.kReferenceBOMStructure Then
+                        Continue For
+                    End If
                 End If
             Catch
             End Try
 
             Dim occDoc As Document = Nothing
-            Try
-                occDoc = occ.Definition.Document
-            Catch
+            If Not TryGetDocument(occ, occDoc) OrElse occDoc Is Nothing Then
                 Continue For
-            End Try
+            End If
 
-            If occDoc Is Nothing Then Continue For
-            Dim fullPath As String = occDoc.FullFileName
+            Dim fullPath As String = ""
+            Try
+                fullPath = occDoc.FullFileName
+            Catch
+            End Try
             If String.IsNullOrEmpty(fullPath) OrElse Not IOFile.Exists(fullPath) Then Continue For
 
             Dim pathLower As String = fullPath.ToLowerInvariant()
@@ -950,10 +1167,17 @@ Public Class RenombrarComponentesDialog
                 Continue For
             End If
 
+            ' Descartar miembros derivados de estados de modelo si aplica
             If TypeOf occDoc Is PartDocument Then
                 Try
                     Dim pDef = CType(occDoc, PartDocument).ComponentDefinition
                     If pDef.IsModelStateMember Then Continue For
+                Catch
+                End Try
+            ElseIf TypeOf occDoc Is AssemblyDocument Then
+                Try
+                    Dim aDef = CType(occDoc, AssemblyDocument).ComponentDefinition
+                    If aDef.IsModelStateMember Then Continue For
                 Catch
                 End Try
             End If
@@ -969,7 +1193,12 @@ Public Class RenombrarComponentesDialog
             Dim sStockNum As String = GetProp(occDoc, "Stock Number")
             Dim sPartNum As String = GetProp(occDoc, "Part Number")
             Dim thumbImg As Image = ObtenerThumbnailSeguro(occDoc)
-            Dim isAsm As Boolean = (occDoc.DocumentType = DocumentTypeEnum.kAssemblyDocumentObject)
+            Dim isAsm As Boolean = False
+            Try
+                isAsm = (occDoc.DocumentType = DocumentTypeEnum.kAssemblyDocumentObject)
+            Catch
+            End Try
+
             Dim sSugeridoDoc As String = If(Not String.IsNullOrEmpty(sPartNum), sPartNum, IOPath.GetFileNameWithoutExtension(fullPath))
 
             Dim item As New ComponenteRenombrarItem With {
@@ -994,12 +1223,95 @@ Public Class RenombrarComponentesDialog
         Return lista
     End Function
 
-    Private Shared Sub ObtenerOcurrenciasRecursivas(occs As ComponentOccurrences, ByRef lista As List(Of ComponentOccurrence))
-        For Each occ As ComponentOccurrence In occs
-            lista.Add(occ)
-            If occ.SubOccurrences IsNot Nothing AndAlso occ.SubOccurrences.Count > 0 Then
-                ObtenerOcurrenciasRecursivas(occ.SubOccurrences, lista)
+    Private Shared Function TryGetDocument(occ As ComponentOccurrence, ByRef docOut As Document) As Boolean
+        docOut = Nothing
+        If occ Is Nothing Then Return False
+        Try
+            Dim def As ComponentDefinition = occ.Definition
+            If def Is Nothing Then Return False
+
+            If TypeOf def Is PartComponentDefinition Then
+                Dim pDef = CType(def, PartComponentDefinition)
+                If pDef.IsModelStateMember Then
+                    docOut = CType(pDef.FactoryDocument, Document)
+                Else
+                    docOut = pDef.Document
+                End If
+                Return (docOut IsNot Nothing)
+            ElseIf TypeOf def Is AssemblyComponentDefinition Then
+                Dim aDef = CType(def, AssemblyComponentDefinition)
+                If aDef.IsModelStateMember Then
+                    docOut = CType(aDef.FactoryDocument, Document)
+                Else
+                    docOut = aDef.Document
+                End If
+                Return (docOut IsNot Nothing)
+            Else
+                Try
+                    docOut = def.Document
+                    Return (docOut IsNot Nothing)
+                Catch
+                    Return False
+                End Try
             End If
+        Catch
+            Return False
+        End Try
+    End Function
+
+    Private Shared Sub ObtenerOcurrenciasRecursivas(occs As Object, ByRef lista As List(Of ComponentOccurrence))
+        If occs Is Nothing Then Return
+        Dim enumerable As System.Collections.IEnumerable = TryCast(occs, System.Collections.IEnumerable)
+        If enumerable Is Nothing Then Return
+
+        For Each rawItem In enumerable
+            Dim occ As ComponentOccurrence = TryCast(rawItem, ComponentOccurrence)
+            If occ Is Nothing Then Continue For
+
+            Dim isSuppressed As Boolean = False
+            Try
+                isSuppressed = occ.Suppressed
+            Catch
+                isSuppressed = False
+            End Try
+            If isSuppressed Then Continue For
+
+            Try
+                lista.Add(occ)
+
+                Dim isAsm As Boolean = False
+                Try
+                    isAsm = (occ.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject)
+                Catch
+                    Try
+                        isAsm = (occ.Definition.Document.DocumentType = DocumentTypeEnum.kAssemblyDocumentObject)
+                    Catch
+                    End Try
+                End Try
+
+                If isAsm Then
+                    Dim subOccs As Object = Nothing
+                    Try
+                        subOccs = occ.SubOccurrences
+                    Catch
+                        subOccs = Nothing
+                    End Try
+
+                    If subOccs IsNot Nothing Then
+                        Dim count As Integer = 0
+                        Try
+                            count = CInt(CallByName(subOccs, "Count", CallType.Get))
+                        Catch
+                            count = 1
+                        End Try
+
+                        If count > 0 Then
+                            ObtenerOcurrenciasRecursivas(subOccs, lista)
+                        End If
+                    End If
+                End If
+            Catch
+            End Try
         Next
     End Sub
 
