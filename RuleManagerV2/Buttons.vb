@@ -108,6 +108,30 @@ Public Class Buttons
             AddressOf Rules.EjecutarRenombrarComponentes,
             "icon_renombrar_comp_32x32.png"))
 
+        _buttonsData.Add(New ButtonData(
+            "Generar Carpeta",
+            "BTN_GENERAR_CARPETA",
+            "Genera la carpeta del proyecto con los documentos de Cartel, Carátula y Lomo a partir de las propiedades del ensamblaje.",
+            "Assembly",
+            AddressOf Rules.EjecutarGenerarCarpeta,
+            "icon_asm_generar_carpeta_32x32.png"))
+
+        _buttonsData.Add(New ButtonData(
+            "Crear Pieza DB",
+            "BTN_CREAR_PIEZA_INSITU",
+            "Crea una nueva pieza in situ (.ipt) en el ensamblaje utilizando la plantilla PIEZA DB 2 y activa la Selección Base automáticamente.",
+            "Assembly",
+            AddressOf Rules.EjecutarCrearPiezaInSitu,
+            "icon_ipt_sel_base_32x32.png"))
+
+        _buttonsData.Add(New ButtonData(
+            "Selección Base (In Situ)",
+            "BTN_SEL_BASE_ASM",
+            "Abre el diálogo de Selección Base para la pieza que está actualmente en edición in situ o seleccionada en el ensamblaje.",
+            "Assembly",
+            AddressOf Rules.EjecutarSelBase,
+            "icon_ipt_sel_base_32x32.png"))
+
         ' =====================================================
         ' IPT
         ' =====================================================

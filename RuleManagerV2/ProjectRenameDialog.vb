@@ -206,7 +206,7 @@ Public Class ProjectRenameDialog
         btnAceptar.Font = New Font("Segoe UI", 9, FontStyle.Bold)
         btnAceptar.Size = New Size(170, 32)
         btnAceptar.Location = New System.Drawing.Point(20, buttonY)
-        btnAceptar.BackColor =System.Drawing.Color.FromArgb(0, 120, 212)
+        btnAceptar.BackColor = System.Drawing.Color.FromArgb(0, 120, 212)
         btnAceptar.ForeColor = System.Drawing.Color.White
         btnAceptar.FlatStyle = FlatStyle.Flat
         btnAceptar.FlatAppearance.BorderSize = 0

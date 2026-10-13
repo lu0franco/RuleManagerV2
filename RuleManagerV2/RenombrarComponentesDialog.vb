@@ -132,44 +132,44 @@ Public Class RenombrarComponentesDialog
             .Dock = DockStyle.Top,
             .Height = 72,
             .Padding = New Padding(12, 8, 12, 8),
-            .BackColor = Color.FromArgb(248, 250, 252)
+            .BackColor = System.Drawing.Color.FromArgb(248, 250, 252)
         }
 
         Dim lblTitulo As New Label With {
             .Text = "Revisión y Asignación de Nombres a Componentes",
             .Font = New Font("Segoe UI", 10.0F, FontStyle.Bold),
-            .ForeColor = Color.FromArgb(15, 23, 42),
-            .Location = New Point(12, 8),
+            .ForeColor = System.Drawing.Color.FromArgb(15, 23, 42),
+            .Location = New System.Drawing.Point(12, 8),
             .AutoSize = True
         }
 
         Dim lblDesc As New Label With {
             .Text = "Verifique los nombres sugeridos basados en Part Number. Puede editar el campo 'Nombre Sugerido' directamente en la celda." & vbCrLf & "Haga doble clic en una fila o use los botones de la derecha para hacer zoom o abrir la pieza.",
-            .ForeColor = Color.FromArgb(100, 116, 139),
-            .Location = New Point(12, 28),
+            .ForeColor = System.Drawing.Color.FromArgb(100, 116, 139),
+            .Location = New System.Drawing.Point(12, 28),
             .AutoSize = True
         }
 
         _btnRestaurar = New Button With {
             .Text = "🔄 Restaurar Sugeridos Originales",
-            .Location = New Point(680, 10),
+            .Location = New System.Drawing.Point(680, 10),
             .Size = New Size(220, 26),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
-            .BackColor = Color.White,
+            .BackColor = System.Drawing.Color.White,
             .Font = New Font("Segoe UI", 8.5F)
         }
         AddHandler _btnRestaurar.Click, AddressOf OnRestaurarSugeridos
 
         Dim lblCmb As New Label With {
             .Text = "Buscar / Seleccionar:",
-            .Location = New Point(530, 43),
+            .Location = New System.Drawing.Point(530, 43),
             .AutoSize = True,
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
             .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold)
         }
 
         _cmbPiezas = New ComboBox With {
-            .Location = New Point(680, 40),
+            .Location = New System.Drawing.Point(680, 40),
             .Size = New Size(310, 24),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
             .DropDownStyle = ComboBoxStyle.DropDownList
@@ -190,100 +190,100 @@ Public Class RenombrarComponentesDialog
             .Width = 260,
             .Padding = New Padding(10),
             .AutoScroll = True,
-            .BackColor = Color.FromArgb(241, 245, 249)
+            .BackColor = System.Drawing.Color.FromArgb(241, 245, 249)
         }
 
         Dim grpPreview As New GroupBox With {
             .Text = "Detalle del Componente",
             .Dock = DockStyle.Fill,
             .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
-            .ForeColor = Color.FromArgb(30, 41, 59)
+            .ForeColor = System.Drawing.Color.FromArgb(30, 41, 59)
         }
 
         _picPreview = New PictureBox With {
-            .Location = New Point(15, 22),
+            .Location = New System.Drawing.Point(15, 22),
             .Size = New Size(210, 160),
             .SizeMode = PictureBoxSizeMode.Zoom,
             .BorderStyle = BorderStyle.FixedSingle,
-            .BackColor = Color.White
+            .BackColor = System.Drawing.Color.White
         }
 
         _lblTipo = New Label With {
-            .Location = New Point(15, 190),
+            .Location = New System.Drawing.Point(15, 190),
             .Size = New Size(210, 18),
             .Font = New Font("Segoe UI", 8.0F, FontStyle.Bold),
-            .ForeColor = Color.FromArgb(71, 85, 105),
+            .ForeColor = System.Drawing.Color.FromArgb(71, 85, 105),
             .Text = "Tipo: -"
         }
 
         _lblStockNumber = New Label With {
-            .Location = New Point(15, 212),
+            .Location = New System.Drawing.Point(15, 212),
             .Size = New Size(210, 32),
             .Font = New Font("Segoe UI", 8.0F),
             .Text = "Stock Number: -"
         }
 
         _lblPartNumber = New Label With {
-            .Location = New Point(15, 246),
+            .Location = New System.Drawing.Point(15, 246),
             .Size = New Size(210, 32),
             .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
-            .ForeColor = Color.FromArgb(2, 132, 199),
+            .ForeColor = System.Drawing.Color.FromArgb(2, 132, 199),
             .Text = "Part Number: -"
         }
 
         _lblActual = New Label With {
-            .Location = New Point(15, 280),
+            .Location = New System.Drawing.Point(15, 280),
             .Size = New Size(210, 32),
             .Font = New Font("Segoe UI", 8.0F),
-            .ForeColor = Color.FromArgb(100, 116, 139),
+            .ForeColor = System.Drawing.Color.FromArgb(100, 116, 139),
             .Text = "Archivo actual: -"
         }
 
         _lblNuevo = New Label With {
-            .Location = New Point(15, 314),
+            .Location = New System.Drawing.Point(15, 314),
             .Size = New Size(210, 36),
             .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
-            .ForeColor = Color.FromArgb(16, 185, 129),
+            .ForeColor = System.Drawing.Color.FromArgb(16, 185, 129),
             .Text = "Nuevo archivo: -"
         }
 
         _btnZoom = New Button With {
             .Text = "🔍 Hacer Zoom",
-            .Location = New Point(15, 358),
+            .Location = New System.Drawing.Point(15, 358),
             .Size = New Size(210, 32),
-            .BackColor = Color.White,
+            .BackColor = System.Drawing.Color.White,
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
-            .ForeColor = Color.FromArgb(30, 41, 59),
+            .ForeColor = System.Drawing.Color.FromArgb(30, 41, 59),
             .FlatStyle = FlatStyle.Flat
         }
         AddHandler _btnZoom.Click, AddressOf OnBtnZoomClick
 
         _btnAbrir = New Button With {
             .Text = "📂 Abrir Elemento",
-            .Location = New Point(15, 396),
+            .Location = New System.Drawing.Point(15, 396),
             .Size = New Size(210, 32),
-            .BackColor = Color.White,
+            .BackColor = System.Drawing.Color.White,
             .Font = New Font("Segoe UI", 9.0F),
-            .ForeColor = Color.FromArgb(30, 41, 59),
+            .ForeColor = System.Drawing.Color.FromArgb(30, 41, 59),
             .FlatStyle = FlatStyle.Flat
         }
         AddHandler _btnAbrir.Click, AddressOf OnBtnAbrirClick
 
         Dim lblTip As New Label With {
             .Text = "💡 Tip: Doble clic en una fila para hacer zoom directamente.",
-            .Location = New Point(15, 436),
+            .Location = New System.Drawing.Point(15, 436),
             .Size = New Size(210, 36),
             .Font = New Font("Segoe UI", 7.5F, FontStyle.Italic),
-            .ForeColor = Color.FromArgb(148, 163, 184)
+            .ForeColor = System.Drawing.Color.FromArgb(148, 163, 184)
         }
 
         ' Botones de acción directa en el panel lateral derecho
         _btnAplicarLateral = New Button With {
             .Text = "✔️ Aplicar y Renombrar",
-            .Location = New Point(15, 478),
+            .Location = New System.Drawing.Point(15, 478),
             .Size = New Size(210, 34),
-            .BackColor = Color.FromArgb(2, 132, 199),
-            .ForeColor = Color.White,
+            .BackColor = System.Drawing.Color.FromArgb(2, 132, 199),
+            .ForeColor = System.Drawing.Color.White,
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
@@ -293,15 +293,15 @@ Public Class RenombrarComponentesDialog
 
         _btnCancelarLateral = New Button With {
             .Text = "✖️ Cancelar",
-            .Location = New Point(15, 518),
+            .Location = New System.Drawing.Point(15, 518),
             .Size = New Size(210, 30),
-            .BackColor = Color.White,
-            .ForeColor = Color.FromArgb(51, 65, 85),
+            .BackColor = System.Drawing.Color.White,
+            .ForeColor = System.Drawing.Color.FromArgb(51, 65, 85),
             .Font = New Font("Segoe UI", 8.5F),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
-        _btnCancelarLateral.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225)
+        _btnCancelarLateral.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(203, 213, 225)
         AddHandler _btnCancelarLateral.Click, AddressOf OnCancelar
 
         grpPreview.Controls.Add(_picPreview)
@@ -324,21 +324,21 @@ Public Class RenombrarComponentesDialog
             .Dock = DockStyle.Bottom,
             .Height = 56,
             .Padding = New Padding(16, 8, 16, 8),
-            .BackColor = Color.FromArgb(241, 245, 249)
+            .BackColor = System.Drawing.Color.FromArgb(241, 245, 249)
         }
 
         Dim sepBottom As New Panel With {
             .Dock = DockStyle.Top,
             .Height = 1,
-            .BackColor = Color.FromArgb(203, 213, 225)
+            .BackColor = System.Drawing.Color.FromArgb(203, 213, 225)
         }
         pnlBottom.Controls.Add(sepBottom)
 
         _lblResumen = New Label With {
-            .Location = New Point(16, 18),
+            .Location = New System.Drawing.Point(16, 18),
             .AutoSize = True,
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
-            .ForeColor = Color.FromArgb(51, 65, 85),
+            .ForeColor = System.Drawing.Color.FromArgb(51, 65, 85),
             .Text = "Total componentes: 0"
         }
 
@@ -355,21 +355,21 @@ Public Class RenombrarComponentesDialog
         _btnCancelar = New Button With {
             .Text = "Cancelar",
             .Size = New Size(110, 34),
-            .BackColor = Color.White,
-            .ForeColor = Color.FromArgb(51, 65, 85),
+            .BackColor = System.Drawing.Color.White,
+            .ForeColor = System.Drawing.Color.FromArgb(51, 65, 85),
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand,
             .Margin = New Padding(10, 0, 0, 0)
         }
-        _btnCancelar.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225)
+        _btnCancelar.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(203, 213, 225)
         AddHandler _btnCancelar.Click, AddressOf OnCancelar
 
         _btnAplicar = New Button With {
             .Text = "Aplicar y Renombrar",
             .Size = New Size(170, 34),
-            .BackColor = Color.FromArgb(2, 132, 199),
-            .ForeColor = Color.White,
+            .BackColor = System.Drawing.Color.FromArgb(2, 132, 199),
+            .ForeColor = System.Drawing.Color.White,
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand,
@@ -385,8 +385,8 @@ Public Class RenombrarComponentesDialog
         pnlBottom.Controls.Add(_lblResumen)
 
         AddHandler pnlBottom.Resize, Sub(s, e)
-                                        _lblResumen.Top = (pnlBottom.ClientSize.Height - _lblResumen.Height) \ 2
-                                    End Sub
+                                         _lblResumen.Top = (pnlBottom.ClientSize.Height - _lblResumen.Height) \ 2
+                                     End Sub
 
         ' =========================================================
         ' CENTRO: DataGridView con las 4 columnas
@@ -398,7 +398,7 @@ Public Class RenombrarComponentesDialog
             .RowHeadersVisible = False,
             .SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             .MultiSelect = False,
-            .BackgroundColor = Color.White,
+            .BackgroundColor = System.Drawing.Color.White,
             .BorderStyle = BorderStyle.None,
             .AutoGenerateColumns = False,
             .EditMode = DataGridViewEditMode.EditOnEnter,
@@ -469,9 +469,9 @@ Public Class RenombrarComponentesDialog
             .Width = 220,
             .DefaultCellStyle = New DataGridViewCellStyle With {
                 .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
-                .BackColor = Color.FromArgb(254, 252, 232),
-                .SelectionBackColor = Color.FromArgb(253, 224, 71),
-                .SelectionForeColor = Color.Black
+                .BackColor = System.Drawing.Color.FromArgb(254, 252, 232),
+                .SelectionBackColor = System.Drawing.Color.FromArgb(253, 224, 71),
+                .SelectionForeColor = System.Drawing.Color.Black
             }
         }
 
@@ -558,9 +558,9 @@ Public Class RenombrarComponentesDialog
         _lblNuevo.Text = "Nuevo archivo: " & item.SuggestedFileName
 
         If item.TieneCambio Then
-            _lblNuevo.ForeColor = Color.FromArgb(16, 185, 129)
+            _lblNuevo.ForeColor = System.Drawing.Color.FromArgb(16, 185, 129)
         Else
-            _lblNuevo.ForeColor = Color.FromArgb(100, 116, 139)
+            _lblNuevo.ForeColor = System.Drawing.Color.FromArgb(100, 116, 139)
         End If
     End Sub
 

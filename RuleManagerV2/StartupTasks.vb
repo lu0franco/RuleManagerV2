@@ -6,10 +6,12 @@ Public Class StartupTasks
 
     Private Shared _invApp As Inventor.Application
     Private Shared _appEvents As ApplicationEvents
+    Private Shared _commandEvents As CommandEvents
     Private Shared _timer As System.Windows.Forms.Timer
     Private Shared _ultimoProyecto As String = ""
     Private Shared _proyectoYaOrganizado As String = ""
     Private Shared _tickCount As Integer = 0
+    Private Shared ReadOnly _piezasProcesadas As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
 
     Private Const LOG_PATH As String = "C:\Temp\Reorder.log"
 
@@ -73,25 +75,260 @@ Public Class StartupTasks
         _invApp = invApp
         _appEvents = _invApp.ApplicationEvents
         AddHandler _appEvents.OnActiveProjectChanged, AddressOf OnActiveProjectChanged
+        AddHandler _appEvents.OnNewDocument, AddressOf OnNewDocument
+        AddHandler _appEvents.OnNewEditObject, AddressOf OnNewEditObject
+
+        Try
+            _commandEvents = _invApp.CommandManager.CommandEvents
+            AddHandler _commandEvents.OnTerminate, AddressOf OnCommandTerminate
+        Catch ex As Exception
+            DebugPrint("No se pudo enlazar CommandEvents: " & ex.Message)
+        End Try
 
         _timer = New System.Windows.Forms.Timer()
-        _timer.Interval = 3000
+        _timer.Interval = 2000
         AddHandler _timer.Tick, AddressOf OnMonitorTick
         _timer.Start()
 
-        DebugPrint("StartupTasks inicializado")
+        DebugPrint("StartupTasks inicializado con OnNewDocument, OnNewEditObject y CommandEvents")
     End Sub
 
     Public Shared Sub Shutdown()
         Try
             If _appEvents IsNot Nothing Then
                 RemoveHandler _appEvents.OnActiveProjectChanged, AddressOf OnActiveProjectChanged
+                RemoveHandler _appEvents.OnNewDocument, AddressOf OnNewDocument
+                RemoveHandler _appEvents.OnNewEditObject, AddressOf OnNewEditObject
+            End If
+            If _commandEvents IsNot Nothing Then
+                RemoveHandler _commandEvents.OnTerminate, AddressOf OnCommandTerminate
             End If
             If _timer IsNot Nothing Then
                 _timer.Stop()
                 _timer.Dispose()
             End If
         Catch
+        End Try
+    End Sub
+
+    ' =========================================================
+    ' EVENTO 1: CREACIÓN DE NUEVO DOCUMENTO (DOC DIRECTO)
+    ' =========================================================
+    Private Shared Sub OnNewDocument(
+        ByVal DocumentObject As Inventor._Document,
+        ByVal BeforeOrAfter As EventTimingEnum,
+        ByVal Context As NameValueMap,
+        ByRef HandlingCode As HandlingCodeEnum)
+
+        If BeforeOrAfter <> EventTimingEnum.kAfter Then Exit Sub
+        If DocumentObject Is Nothing Then Exit Sub
+        If DocumentObject.DocumentType <> DocumentTypeEnum.kPartDocumentObject Then Exit Sub
+
+        VerificarYEjecutarSeleccionBaseParaPieza(DocumentObject, "OnNewDocument", Context, False)
+    End Sub
+
+    ' =========================================================
+    ' EVENTO 2: ENTRADA EN EDICIÓN DE OBJETO (IN SITU EN ENSAMBLAJE)
+    ' =========================================================
+    Private Shared Sub OnNewEditObject(
+        ByVal EditObject As Object,
+        ByVal BeforeOrAfter As EventTimingEnum,
+        ByVal Context As NameValueMap,
+        ByRef HandlingCode As HandlingCodeEnum)
+
+        If BeforeOrAfter <> EventTimingEnum.kAfter Then Exit Sub
+        If Not AddinSettings.Current.ActivarSeleccionBaseEnPlantilla Then Exit Sub
+
+        Try
+            Dim partDoc As PartDocument = Nothing
+
+            ' Caso A: Documento activo en edición in situ
+            If _invApp.ActiveEditDocument IsNot Nothing AndAlso
+               _invApp.ActiveEditDocument.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
+                partDoc = DirectCast(_invApp.ActiveEditDocument, PartDocument)
+
+            ' Caso B: EditObject es ComponentOccurrence o PartComponentDefinition
+            ElseIf TypeOf EditObject Is ComponentOccurrence Then
+                Dim occ As ComponentOccurrence = DirectCast(EditObject, ComponentOccurrence)
+                If occ.Definition.Document.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
+                    partDoc = DirectCast(occ.Definition.Document, PartDocument)
+                End If
+            ElseIf TypeOf EditObject Is PartComponentDefinition Then
+                Dim def As PartComponentDefinition = DirectCast(EditObject, PartComponentDefinition)
+                partDoc = DirectCast(def.Document, PartDocument)
+            End If
+
+            If partDoc IsNot Nothing Then
+                ' Si estamos dentro de un ensamblaje, es una edición in situ
+                Dim enEnsamblaje As Boolean = (_invApp.ActiveDocument IsNot Nothing AndAlso
+                                               _invApp.ActiveDocument.DocumentType = DocumentTypeEnum.kAssemblyDocumentObject)
+                VerificarYEjecutarSeleccionBaseParaPieza(DirectCast(partDoc, Document), "OnNewEditObject (In Situ)", Context, enEnsamblaje)
+            End If
+
+        Catch ex As Exception
+            DebugPrint("Excepción en OnNewEditObject: " & ex.Message)
+        End Try
+    End Sub
+
+    ' =========================================================
+    ' EVENTO 3: TERMINACIÓN DE COMANDO NATIVO DE CREACIÓN IN SITU
+    ' =========================================================
+    Private Shared Sub OnCommandTerminate(
+        ByVal CommandName As String,
+        ByVal Context As NameValueMap,
+        ByRef HandlingCode As HandlingCodeEnum)
+
+        If Not AddinSettings.Current.ActivarSeleccionBaseEnPlantilla Then Exit Sub
+
+        Try
+            If String.IsNullOrEmpty(CommandName) Then Exit Sub
+
+            ' Comandos nativos de Inventor de creación in situ dentro de ensamblaje
+            Dim cmdUpper As String = CommandName.ToUpper()
+            If cmdUpper.Contains("ASSEMBLYCREATECOMPONENT") OrElse
+               cmdUpper.Contains("ASSEMBLYCREATEINPLACE") OrElse
+               cmdUpper = "ASSEMBLYCREATECOMPONENTCMD" Then
+
+                DebugPrint("Comando creación in situ detectado: " & CommandName)
+
+                ' En este instante Inventor ya colocó la nueva pieza y está activa en ActiveEditDocument
+                If _invApp.ActiveEditDocument IsNot Nothing AndAlso
+                   _invApp.ActiveEditDocument.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
+
+                    VerificarYEjecutarSeleccionBaseParaPieza(_invApp.ActiveEditDocument, "OnCommandTerminate (In Situ)", Context, True)
+                End If
+            End If
+        Catch ex As Exception
+            DebugPrint("Excepción en OnCommandTerminate: " & ex.Message)
+        End Try
+    End Sub
+
+    ' =========================================================
+    ' LÓGICA CENTRAL DE DETECCIÓN Y DISPARO DE SELECCIÓN BASE
+    ' =========================================================
+    Private Shared Sub VerificarYEjecutarSeleccionBaseParaPieza(
+        doc As Document,
+        origen As String,
+        context As NameValueMap,
+        esInSituEnEnsamblaje As Boolean)
+
+        If doc Is Nothing OrElse doc.DocumentType <> DocumentTypeEnum.kPartDocumentObject Then Exit Sub
+        If Not AddinSettings.Current.ActivarSeleccionBaseEnPlantilla Then Exit Sub
+
+        Try
+            Dim docId As String = ""
+            Try
+                docId = doc.InternalName
+            Catch
+            End Try
+            If String.IsNullOrEmpty(docId) Then docId = doc.FullFileName
+            If String.IsNullOrEmpty(docId) Then docId = doc.DisplayName
+
+            ' Evitar procesar dos veces el mismo documento en la sesión
+            If Not String.IsNullOrEmpty(docId) AndAlso _piezasProcesadas.Contains(docId) Then
+                Exit Sub
+            End If
+
+            ' Si la pieza ya tiene la iProperty MATERIAL_BASE con contenido, ya fue configurada anteriormente
+            Try
+                Dim userProps As PropertySet = doc.PropertySets.Item("Inventor User Defined Properties")
+                If userProps IsNot Nothing Then
+                    For Each p As Inventor.Property In userProps
+                        If p.Name.Equals("MATERIAL_BASE", StringComparison.OrdinalIgnoreCase) AndAlso
+                           p.Value IsNot Nothing AndAlso
+                           Not String.IsNullOrWhiteSpace(p.Value.ToString()) Then
+                            If Not String.IsNullOrEmpty(docId) Then _piezasProcesadas.Add(docId)
+                            Exit Sub
+                        End If
+                    Next
+                End If
+            Catch
+            End Try
+
+            Dim esPlantillaObjetivo As Boolean = False
+            Dim plantillaBuscada As String = AddinSettings.Current.PlantillaPiezaDefault.ToUpper()
+
+            ' 1. Verificar Context si contiene el nombre de la plantilla de forma segura
+            If context IsNot Nothing Then
+                For i As Integer = 1 To context.Count
+                    Try
+                        Dim kName As String = context.Name(i)
+                        Dim valObj As Object = context.Value(kName)
+                        If valObj IsNot Nothing Then
+                            Dim valStr As String = valObj.ToString().ToUpper()
+                            If valStr.Contains("PIEZA DB 2") OrElse valStr.Contains(plantillaBuscada) Then
+                                esPlantillaObjetivo = True
+                                Exit For
+                            End If
+                        End If
+                    Catch
+                    End Try
+                Next
+            End If
+
+            ' 2. Verificar nombre o ruta del documento
+            If Not esPlantillaObjetivo Then
+                Dim full As String = (doc.FullFileName & " " & doc.DisplayName).ToUpper()
+                If full.Contains("PIEZA DB 2") OrElse full.Contains(plantillaBuscada) Then
+                    esPlantillaObjetivo = True
+                End If
+            End If
+
+            ' 3. Verificar propiedades de usuario o parámetros importados de la plantilla
+            If Not esPlantillaObjetivo Then
+                Try
+                    Dim userProps As PropertySet = doc.PropertySets.Item("Inventor User Defined Properties")
+                    If userProps IsNot Nothing Then
+                        For Each p As Inventor.Property In userProps
+                            Dim pName As String = p.Name.ToUpper()
+                            Dim pVal As String = If(p.Value IsNot Nothing, p.Value.ToString().ToUpper(), "")
+                            If pName.Contains("PIEZA DB 2") OrElse pVal.Contains("PIEZA DB 2") OrElse
+                               (pName = "PLANTILLA" AndAlso pVal.Contains("PIEZA DB")) Then
+                                esPlantillaObjetivo = True
+                                Exit For
+                            End If
+                        Next
+                    End If
+                Catch
+                End Try
+            End If
+
+            ' 4. Si proviene de una creación in situ dentro de ensamblaje:
+            ' En la empresa la plantilla predeterminada de nuevas piezas es siempre PIEZA DB 2.
+            ' Si la pieza no tiene operaciones modeladas aún (Features.Count = 0) y no tiene MATERIAL_BASE,
+            ' es una pieza recién creada in situ con la plantilla objetivo.
+            If Not esPlantillaObjetivo AndAlso esInSituEnEnsamblaje Then
+                Try
+                    Dim partDoc As PartDocument = DirectCast(doc, PartDocument)
+                    If partDoc.ComponentDefinition.Features.Count = 0 Then
+                        esPlantillaObjetivo = True
+                    End If
+                Catch
+                End Try
+            End If
+
+            If esPlantillaObjetivo Then
+                If Not String.IsNullOrEmpty(docId) Then _piezasProcesadas.Add(docId)
+                DebugPrint($"Pieza detectada para Selección Base ({origen}) [{doc.DisplayName}] -> Lanzando diálogo...")
+
+                ' Disparar mediante Timer para permitir que Inventor estabilice el viewport y el foco de edición
+                Dim delayTimer As New System.Windows.Forms.Timer()
+                delayTimer.Interval = 350
+                AddHandler delayTimer.Tick, Sub(sender As Object, ev As EventArgs)
+                                                delayTimer.Stop()
+                                                delayTimer.Dispose()
+                                                Try
+                                                    Dim engine As New SeleccionBaseEngine(_invApp)
+                                                    engine.Ejecutar(doc)
+                                                Catch ex As Exception
+                                                    DebugPrint("Error al ejecutar Selección Base: " & ex.Message)
+                                                End Try
+                                            End Sub
+                delayTimer.Start()
+            End If
+
+        Catch ex As Exception
+            DebugPrint("Excepción en VerificarYEjecutarSeleccionBaseParaPieza: " & ex.Message)
         End Try
     End Sub
 

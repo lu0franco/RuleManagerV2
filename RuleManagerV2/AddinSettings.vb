@@ -22,6 +22,8 @@ Public Class AddinSettings
     Public Property OmitirContentCenterCOM As Boolean = True
     Public Property DetectarSimetriasAuto As Boolean = True
     Public Property ActualizarCantidadUsada As Boolean = True
+    Public Property RutaPlantillasReglas As String = "D:\Bibliotecas\Ilogic\Plantillas para reglas"
+    Public Property AbrirCarpetaAlTerminar As Boolean = True
 
     ' ============================================
     ' 3. PLANOS (IDW)
@@ -31,10 +33,49 @@ Public Class AddinSettings
     Public Property PlantillaLdmExcel As String = "REQUERIMIENTO DE MATERIALESV5.xlsx"
 
     ' ============================================
-    ' 4. PIEZA (IPT)
+    ' 4. PIEZA (IPT) & SELECCIÓN BASE
     ' ============================================
     Public Property CalcularCuboCorteAuto As Boolean = True
     Public Property ExtraerParametrosChapa As Boolean = True
+    Public Property PlantillaPiezaDefault As String = "PIEZA DB 2.ipt"
+    Public Property ActivarSeleccionBaseEnPlantilla As Boolean = True
+
+    ' Catálogos persistentes inyectados
+    Public Property EspesoresChapaInyectados As New List(Of String)
+    Public Property EspesoresPlanchaInyectados As New List(Of String)
+    Public Property DiametrosRedondoInyectados As New List(Of String)
+    Public Property DimensionesCuadradoInyectados As New List(Of String)
+    Public Property MetalesInyectados As New List(Of String)
+    Public Property PlasticosInyectados As New List(Of String)
+
+    ' ============================================
+    ' 4.1 MEMORIA DE ÚLTIMA CREACIÓN DE PIEZA
+    ' ============================================
+    Public Property PrecargarGuardarDatosPieza As Boolean = True
+    Public Property UltimoTipoPieza As String = "CHAPA"
+
+    ' Datos memorizados para CHAPA
+    Public Property UltimaChapaUnidadesMm As Boolean = True
+    Public Property UltimaChapaEspesor As String = "3mm"
+    Public Property UltimaChapaMaterial As String = "Acero ASTM A36"
+
+    ' Datos memorizados para PLANCHA
+    Public Property UltimaPlanchaEspesor As String = "10mm"
+    Public Property UltimaPlanchaMaterial As String = "APM - NATURAL"
+
+    ' Datos memorizados para CUADRADO
+    Public Property UltimoCuadradoSubTipo As String = "TREFILADO"
+    Public Property UltimoCuadradoDimension As String = "1/2"" (12.70mm)"
+    Public Property UltimoCuadradoMaterial As String = "Acero SAE 1045"
+
+    ' Datos memorizados para REDONDO
+    Public Property UltimoRedondoSubTipo As String = "TREFILADO"
+    Public Property UltimoRedondoDimension As String = "25mm"
+    Public Property UltimoRedondoMaterial As String = "AISI 304"
+
+    ' Datos memorizados para GENERICO y GUIA
+    Public Property UltimoGenericoMaterial As String = "Genérico"
+    Public Property UltimaGuiaMaterial As String = "Genérico"
 
     ' ============================================
     ' 5. PROYECTO & ARCHIVOS

@@ -67,19 +67,13 @@ Public Class Rules
         invApp As Inventor.Application)
 
         Try
-
-            Dim iLogicAuto As Object =
-                GetILogic(invApp)
-
-            iLogicAuto.RunExternalRule(
-                invApp.ActiveDocument,
-                "D:\Bibliotecas\Ilogic\Reglas\IAM\Contador de elementosV2.iLogicVb"
-            )
-
+            Dim engine As New ContadorElementosEngine(invApp)
+            engine.Ejecutar()
         Catch ex As Exception
-
-            MsgBox(ex.ToString)
-
+            MessageBox.Show("Error en Contador de partes: " & ex.Message,
+                            "Error - Contador de Partes",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error)
         End Try
 
     End Sub
@@ -105,26 +99,150 @@ Public Class Rules
 
     End Sub
 
-    Public Shared Sub EjecutarSelBase(
-        invApp As Inventor.Application)
-
+    Public Shared Sub EjecutarSelBase(invApp As Inventor.Application)
         Try
+            Dim engine As New SeleccionBaseEngine(invApp)
+            engine.EjecutarDesdeDocumentoActivo()
+        Catch ex As Exception
+            MessageBox.Show("Error en Selección Base: " & ex.Message, "Error - Selección Base", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
 
-            Dim iLogicAuto As Object =
-                GetILogic(invApp)
+    ' =========================================================
+    ' CREAR PIEZA IN SITU CON PLANTILLA PIEZA DB 2 (DESDE IAM)
+    ' =========================================================
+    Public Shared Sub EjecutarCrearPiezaInSitu(invApp As Inventor.Application)
+        Try
+            If invApp.ActiveDocument Is Nothing OrElse
+               invApp.ActiveDocument.DocumentType <> DocumentTypeEnum.kAssemblyDocumentObject Then
+                MessageBox.Show("Crear Pieza In Situ requiere estar en un entorno de ensamblaje (.iam) activo.",
+                                "Crear Pieza In Situ", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
 
-            iLogicAuto.RunExternalRule(
-                invApp.ActiveDocument,
-                "D:\Bibliotecas\Ilogic\Reglas\IPT\Seleccion baseV2.iLogicVb"
-            )
+            Dim asmDoc As AssemblyDocument = DirectCast(invApp.ActiveDocument, AssemblyDocument)
+
+            ' 1. Solicitar el nombre del nuevo archivo de pieza
+            Dim nombreSugerido As String = "PIEZA-" & DateTime.Now.ToString("HHmmss")
+            Dim nombrePieza As String = Microsoft.VisualBasic.Interaction.InputBox(
+                "Ingrese el nombre para la nueva pieza:" & vbCrLf & "(Ejemplo: SOPORTE-01)",
+                "Crear Pieza In Situ (PIEZA DB 2)",
+                nombreSugerido)
+
+            If String.IsNullOrWhiteSpace(nombrePieza) Then Return
+            If Not nombrePieza.EndsWith(".ipt", StringComparison.OrdinalIgnoreCase) Then
+                nombrePieza &= ".ipt"
+            End If
+
+            ' 2. Buscar plantilla PIEZA DB 2.ipt
+            Dim rutaPlantilla As String = EncontrarRutaPlantillaPieza(invApp)
+
+            ' 3. Determinar carpeta destino (directorio del ensamblaje o workspace del proyecto)
+            Dim carpetaDestino As String = ""
+            If Not String.IsNullOrEmpty(asmDoc.FullFileName) Then
+                carpetaDestino = System.IO.Path.GetDirectoryName(asmDoc.FullFileName)
+            Else
+                Try
+                    carpetaDestino = invApp.DesignProjectManager.ActiveDesignProject.WorkspacePath
+                Catch
+                    carpetaDestino = System.IO.Path.GetTempPath()
+                End Try
+            End If
+
+            Dim rutaNuevaPieza As String = System.IO.Path.Combine(carpetaDestino, nombrePieza)
+
+            ' 4. Crear ocurrencia in situ
+            Dim matrixIdentidad As Matrix = invApp.TransientGeometry.CreateMatrix()
+            Dim nuevaOcc As ComponentOccurrence = Nothing
+
+            If System.IO.File.Exists(rutaPlantilla) Then
+                ' Copiar archivo de plantilla a la ruta destino
+                System.IO.File.Copy(rutaPlantilla, rutaNuevaPieza, True)
+                nuevaOcc = asmDoc.ComponentDefinition.Occurrences.Add(rutaNuevaPieza, matrixIdentidad)
+            Else
+                ' Usar AddNewComponent nativo de Inventor
+                Try
+                    nuevaOcc = asmDoc.ComponentDefinition.Occurrences.AddNewComponent(
+                        If(Not String.IsNullOrEmpty(rutaPlantilla), rutaPlantilla, "Standard.ipt"),
+                        matrixIdentidad)
+                Catch
+                    ' Respaldo: crear nuevo documento IPT y agregarlo
+                    Dim newDoc As PartDocument = DirectCast(invApp.Documents.Add(DocumentTypeEnum.kPartDocumentObject, rutaPlantilla, False), PartDocument)
+                    newDoc.SaveAs(rutaNuevaPieza, False)
+                    newDoc.Close()
+                    nuevaOcc = asmDoc.ComponentDefinition.Occurrences.Add(rutaNuevaPieza, matrixIdentidad)
+                End Try
+            End If
+
+            If nuevaOcc IsNot Nothing Then
+                ' Entrar en edición in situ
+                Try
+                    nuevaOcc.Edit()
+                Catch
+                End Try
+
+                ' 5. Lanzar de inmediato el configurador de Selección Base
+                Dim partDoc As PartDocument = DirectCast(nuevaOcc.Definition.Document, PartDocument)
+                Dim engine As New SeleccionBaseEngine(invApp)
+                engine.Ejecutar(DirectCast(partDoc, Document))
+            End If
 
         Catch ex As Exception
+            MessageBox.Show("Error al crear pieza in situ con PIEZA DB 2: " & ex.Message,
+                            "Error - Crear Pieza In Situ", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
 
-            MsgBox(ex.ToString)
+    Public Shared Function EncontrarRutaPlantillaPieza(invApp As Inventor.Application) As String
+        Dim nombrePlantilla As String = AddinSettings.Current.PlantillaPiezaDefault
+        If String.IsNullOrEmpty(nombrePlantilla) Then nombrePlantilla = "PIEZA DB 2.ipt"
 
+        Try
+            ' 1. Carpeta de plantillas configurada en Opciones de Inventor
+            Dim templatesFolder As String = invApp.FileOptions.TemplatesPath
+            If Not String.IsNullOrEmpty(templatesFolder) Then
+                Dim c1 As String = System.IO.Path.Combine(templatesFolder, nombrePlantilla)
+                If System.IO.File.Exists(c1) Then Return c1
+
+                Dim c2 As String = System.IO.Path.Combine(templatesFolder, "Metric", nombrePlantilla)
+                If System.IO.File.Exists(c2) Then Return c2
+            End If
+
+            ' 2. Carpeta de plantillas del proyecto activo
+            Try
+                Dim projTemplates As String = invApp.DesignProjectManager.ActiveDesignProject.TemplatesPath
+                If Not String.IsNullOrEmpty(projTemplates) Then
+                    Dim c3 As String = System.IO.Path.Combine(projTemplates, nombrePlantilla)
+                    If System.IO.File.Exists(c3) Then Return c3
+                End If
+            Catch
+            End Try
+
+            ' 3. Carpeta del Add-In / Templates
+            Dim addinDir As String = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)
+            Dim c4 As String = System.IO.Path.Combine(addinDir, nombrePlantilla)
+            If System.IO.File.Exists(c4) Then Return c4
+
+            Dim c5 As String = System.IO.Path.Combine(addinDir, "Templates", nombrePlantilla)
+            If System.IO.File.Exists(c5) Then Return c5
+
+            ' 4. Rutas comunes de la empresa
+            Dim rutasEmpresa As String() = {
+                "D:\Bibliotecas\Plantillas",
+                "D:\Bibliotecas\Ilogic\Plantillas para reglas",
+                "C:\Bibliotecas\Plantillas"
+            }
+            For Each r As String In rutasEmpresa
+                Dim cEmp As String = System.IO.Path.Combine(r, nombrePlantilla)
+                If System.IO.File.Exists(cEmp) Then Return cEmp
+            Next
+
+        Catch ex As Exception
+            System.Diagnostics.Debug.WriteLine("Error buscando plantilla: " & ex.Message)
         End Try
 
-    End Sub
+        Return nombrePlantilla
+    End Function
     Public Shared Sub EjecutarPropAsignPart(
        invApp As Inventor.Application)
 
@@ -741,6 +859,19 @@ Public Class Rules
             MsgBox("Error en Renombrar Componentes: " & ex.Message, MsgBoxStyle.Critical, "Error")
         End Try
 
+    End Sub
+
+    ' ====================================================
+    ' GENERAR CARPETA DEL PROYECTO (CARTEL, CARÁTULA, LOMO)
+    ' ====================================================
+    Public Shared Sub EjecutarGenerarCarpeta(invApp As Inventor.Application)
+        Try
+            Dim engine As New GenerarCarpetaEngine(invApp)
+            engine.Ejecutar()
+        Catch ex As Exception
+            MessageBox.Show("Error al ejecutar Generar Carpeta: " & ex.Message,
+                            "Error - Generar Carpeta", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 
     ' ============================================
