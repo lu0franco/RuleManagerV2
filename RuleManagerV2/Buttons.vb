@@ -116,21 +116,6 @@ Public Class Buttons
             AddressOf Rules.EjecutarGenerarCarpeta,
             "icon_asm_generar_carpeta_32x32.png"))
 
-        _buttonsData.Add(New ButtonData(
-            "Crear Pieza DB",
-            "BTN_CREAR_PIEZA_INSITU",
-            "Crea una nueva pieza in situ (.ipt) en el ensamblaje utilizando la plantilla PIEZA DB 2 y activa la Selección Base automáticamente.",
-            "Assembly",
-            AddressOf Rules.EjecutarCrearPiezaInSitu,
-            "icon_ipt_sel_base_32x32.png"))
-
-        _buttonsData.Add(New ButtonData(
-            "Selección Base (In Situ)",
-            "BTN_SEL_BASE_ASM",
-            "Abre el diálogo de Selección Base para la pieza que está actualmente en edición in situ o seleccionada en el ensamblaje.",
-            "Assembly",
-            AddressOf Rules.EjecutarSelBase,
-            "icon_ipt_sel_base_32x32.png"))
 
         ' =====================================================
         ' IPT
@@ -171,6 +156,14 @@ Public Class Buttons
             "Utilice esta herramienta para obtener las propiedades de CANTIDAD_USADA...",
             "Drawing",
             AddressOf Rules.EjecutarTraerCantidades,
+            "icon_1_traer_cantidades_32x32.png"))
+
+        _buttonsData.Add(New ButtonData(
+            "Ajustar Cant. LDM",
+            "BTN_AJUSTAR_CANT_LDM",
+            "Compara CANTIDAD_USADA con la cantidad del subensamblaje en la lista de piezas y ajusta el valor localmente sin alterar la pieza 3D.",
+            "Drawing",
+            AddressOf Rules.EjecutarAjustarCantidadesLDM,
             "icon_1_traer_cantidades_32x32.png"))
 
         _buttonsData.Add(New ButtonData(

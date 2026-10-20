@@ -6,7 +6,7 @@ Public Class StartupTasks
 
     Private Shared _invApp As Inventor.Application
     Private Shared _appEvents As ApplicationEvents
-    Private Shared _commandEvents As CommandEvents
+    Private Shared _userInputEvents As UserInputEvents
     Private Shared _timer As System.Windows.Forms.Timer
     Private Shared _ultimoProyecto As String = ""
     Private Shared _proyectoYaOrganizado As String = ""
@@ -79,10 +79,10 @@ Public Class StartupTasks
         AddHandler _appEvents.OnNewEditObject, AddressOf OnNewEditObject
 
         Try
-            _commandEvents = _invApp.CommandManager.CommandEvents
-            AddHandler _commandEvents.OnTerminate, AddressOf OnCommandTerminate
+            _userInputEvents = _invApp.CommandManager.UserInputEvents
+            AddHandler _userInputEvents.OnTerminateCommand, AddressOf OnCommandTerminate
         Catch ex As Exception
-            DebugPrint("No se pudo enlazar CommandEvents: " & ex.Message)
+            DebugPrint("No se pudo enlazar UserInputEvents: " & ex.Message)
         End Try
 
         _timer = New System.Windows.Forms.Timer()
@@ -90,7 +90,7 @@ Public Class StartupTasks
         AddHandler _timer.Tick, AddressOf OnMonitorTick
         _timer.Start()
 
-        DebugPrint("StartupTasks inicializado con OnNewDocument, OnNewEditObject y CommandEvents")
+        DebugPrint("StartupTasks inicializado con OnNewDocument, OnNewEditObject y UserInputEvents")
     End Sub
 
     Public Shared Sub Shutdown()
@@ -100,8 +100,8 @@ Public Class StartupTasks
                 RemoveHandler _appEvents.OnNewDocument, AddressOf OnNewDocument
                 RemoveHandler _appEvents.OnNewEditObject, AddressOf OnNewEditObject
             End If
-            If _commandEvents IsNot Nothing Then
-                RemoveHandler _commandEvents.OnTerminate, AddressOf OnCommandTerminate
+            If _userInputEvents IsNot Nothing Then
+                RemoveHandler _userInputEvents.OnTerminateCommand, AddressOf OnCommandTerminate
             End If
             If _timer IsNot Nothing Then
                 _timer.Stop()
@@ -147,7 +147,7 @@ Public Class StartupTasks
                _invApp.ActiveEditDocument.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
                 partDoc = DirectCast(_invApp.ActiveEditDocument, PartDocument)
 
-            ' Caso B: EditObject es ComponentOccurrence o PartComponentDefinition
+                ' Caso B: EditObject es ComponentOccurrence o PartComponentDefinition
             ElseIf TypeOf EditObject Is ComponentOccurrence Then
                 Dim occ As ComponentOccurrence = DirectCast(EditObject, ComponentOccurrence)
                 If occ.Definition.Document.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
@@ -175,8 +175,7 @@ Public Class StartupTasks
     ' =========================================================
     Private Shared Sub OnCommandTerminate(
         ByVal CommandName As String,
-        ByVal Context As NameValueMap,
-        ByRef HandlingCode As HandlingCodeEnum)
+        ByVal Context As NameValueMap)
 
         If Not AddinSettings.Current.ActivarSeleccionBaseEnPlantilla Then Exit Sub
 

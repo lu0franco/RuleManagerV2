@@ -421,6 +421,27 @@ Public Class Rules
 
     End Sub
 
+    Public Shared Sub EjecutarAjustarCantidadesLDM(invApp As Inventor.Application)
+        Try
+            If invApp.ActiveDocument Is Nothing Then
+                MessageBox.Show("No hay ningún documento activo en Autodesk Inventor.",
+                                "Ajustar Cantidades LDM", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
+
+            If invApp.ActiveDocument.DocumentType <> DocumentTypeEnum.kDrawingDocumentObject Then
+                MessageBox.Show("Esta herramienta solo funciona en documentos de plano o dibujo (.idw / .dwg).",
+                                "Ajustar Cantidades LDM", MessageBoxButtons.OK, MessageBoxIcon.Exclamation)
+                Return
+            End If
+
+            Dim manager As New PartsListQuantityManager(invApp)
+            manager.Ejecutar()
+        Catch ex As Exception
+            MessageBox.Show("Error en Ajustar Cantidades LDM: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
     Public Shared Sub EjecutarAddCopias(
    invApp As Inventor.Application)
 
