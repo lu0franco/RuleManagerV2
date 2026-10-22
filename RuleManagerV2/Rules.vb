@@ -902,7 +902,7 @@ Public Class Rules
         invApp As Inventor.Application)
 
         Try
-            Using dlg As New OptionsDialog()
+            Using dlg As New OptionsDialog(invApp)
 
                 ' Centrar sobre la ventana principal de Inventor
                 Dim hwnd As IntPtr = IntPtr.Zero
@@ -924,6 +924,29 @@ Public Class Rules
                    MsgBoxStyle.Critical, "Error")
         End Try
 
+    End Sub
+
+    ' ====================================================
+    ' BACKUP Y SINCRONIZACIÓN DE BIBLIOTECAS (LOCAL ⇄ SERVIDOR)
+    ' ====================================================
+    Public Shared Sub EjecutarSincronizarBibliotecas(invApp As Inventor.Application)
+        Try
+            Using dlg As New BackupSyncDialog(invApp)
+                Dim hwnd As IntPtr = IntPtr.Zero
+                Try
+                    hwnd = New IntPtr(invApp.MainFrameHWND)
+                Catch
+                End Try
+
+                If hwnd <> IntPtr.Zero Then
+                    dlg.ShowDialog(New WindowWrapper(hwnd))
+                Else
+                    dlg.ShowDialog()
+                End If
+            End Using
+        Catch ex As Exception
+            MessageBox.Show("Error al abrir Sincronización de Bibliotecas: " & ex.Message, "Error - Backup", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 
 End Class

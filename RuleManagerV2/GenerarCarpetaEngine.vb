@@ -296,7 +296,7 @@ Public Class GenerarCarpetaEngine
                     ' Guardar la carpeta elegida para agilizar futuras búsquedas
                     Dim nuevaCarpeta As String = System.IO.Path.GetDirectoryName(ofd.FileName)
                     AddinSettings.Current.RutaPlantillasReglas = nuevaCarpeta
-                    AddinSettings.Current.Save()
+                    AddinSettings.Save()
                     Return ofd.FileName
                 End If
             End Using

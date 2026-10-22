@@ -255,6 +255,14 @@ Public Class Buttons
             "icon_organizar_proyecto_32x32.png"))
 
         _buttonsData.Add(New ButtonData(
+            "Backup Bibliotecas",
+            "BTN_SYNC_BIBLIOTECAS",
+            "Compara y sincroniza las bibliotecas locales (D:\Bibliotecas) con el servidor de red con registro de cambios.",
+            "ZeroDoc",
+            AddressOf Rules.EjecutarSincronizarBibliotecas,
+            "icon_organizar_proyecto_32x32.png"))
+
+        _buttonsData.Add(New ButtonData(
             "OPCIONES",
             "BTN_OPCIONES",
             "Configura el comportamiento del addin RuleManager.",

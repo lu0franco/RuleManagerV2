@@ -40,6 +40,12 @@ Public Class OptionsDialog
     Private _cmbTipoBom As ComboBox
     Private _txtPrefijoExtId As TextBox
 
+    ' Controles - Tab Backup & Red
+    Private _txtRutaLocalBib As TextBox
+    Private _txtRutaServidorBib As TextBox
+    Private _cmbIntervaloBackup As ComboBox
+    Private _chkAutoSyncBib As CheckBox
+
     ' Botones inferiores
     Private _btnAceptar As Button
     Private _btnCancelar As Button
@@ -47,7 +53,19 @@ Public Class OptionsDialog
     Private _btnImportar As Button
     Private _btnExportar As Button
 
-    Public Sub New()
+    Private ReadOnly _invApp As Inventor.Application
+
+    Public Sub New(Optional invApp As Inventor.Application = Nothing)
+        If invApp IsNot Nothing Then
+            _invApp = invApp
+        Else
+            Try
+                _invApp = DirectCast(Microsoft.VisualBasic.Interaction.GetObject(Nothing, "Inventor.Application"), Inventor.Application)
+            Catch
+                _invApp = Nothing
+            End Try
+        End If
+
         ' --- Ventana ---
         Text = "RuleManager - Opciones de la aplicación"
         StartPosition = FormStartPosition.CenterScreen
@@ -77,6 +95,7 @@ Public Class OptionsDialog
         Dim tabPieza As New TabPage("Pieza")
         Dim tabProyecto As New TabPage("Proyecto & Archivos")
         Dim tabOdoo As New TabPage("Odoo ERP")
+        Dim tabBackup As New TabPage("Backup & Red")
 
         ConstruirTabGeneral(tabGeneral)
         ConstruirTabEnsamblaje(tabEnsamblaje)
@@ -84,6 +103,7 @@ Public Class OptionsDialog
         ConstruirTabPieza(tabPieza)
         ConstruirTabProyecto(tabProyecto)
         ConstruirTabOdoo(tabOdoo)
+        ConstruirTabBackup(tabBackup)
 
         _tabControl.TabPages.Add(tabGeneral)
         _tabControl.TabPages.Add(tabEnsamblaje)
@@ -91,6 +111,7 @@ Public Class OptionsDialog
         _tabControl.TabPages.Add(tabPieza)
         _tabControl.TabPages.Add(tabProyecto)
         _tabControl.TabPages.Add(tabOdoo)
+        _tabControl.TabPages.Add(tabBackup)
 
         Controls.Add(_tabControl)
 
@@ -302,6 +323,46 @@ Public Class OptionsDialog
         tab.Controls.Add(_txtPrefijoExtId)
     End Sub
 
+    Private Sub ConstruirTabBackup(tab As TabPage)
+        Dim secBackup As Control = CrearEncabezadoSeccion("Sincronización y Backup de Bibliotecas (Local ⇄ Servidor)", 15, 15)
+
+        Dim lblLocal As New Label With {.Text = "Ruta Local (PC):", .Location = New System.Drawing.Point(20, 48), .AutoSize = True}
+        _txtRutaLocalBib = New TextBox With {.Location = New System.Drawing.Point(170, 45), .Size = New Size(320, 23)}
+
+        Dim lblServidor As New Label With {.Text = "Ruta Servidor Red:", .Location = New System.Drawing.Point(20, 80), .AutoSize = True}
+        _txtRutaServidorBib = New TextBox With {.Location = New System.Drawing.Point(170, 77), .Size = New Size(320, 23)}
+
+        Dim lblIntervalo As New Label With {.Text = "Intervalo Programado:", .Location = New System.Drawing.Point(20, 114), .AutoSize = True}
+        _cmbIntervaloBackup = New ComboBox With {
+            .Location = New System.Drawing.Point(170, 111),
+            .Size = New Size(160, 23),
+            .DropDownStyle = ComboBoxStyle.DropDownList
+        }
+        _cmbIntervaloBackup.Items.AddRange(New Object() {"Manual", "Diario", "Semanal", "Mensual"})
+
+        _chkAutoSyncBib = New CheckBox With {
+            .Text = "Sincronizar automáticamente al iniciar Inventor si se venció el intervalo",
+            .Location = New System.Drawing.Point(20, 150),
+            .Size = New Size(500, 22),
+            .AutoSize = True
+        }
+
+        Dim btnAbrirSyncDialog As New Button With {
+            .Text = "Abrir Administrador de Backup / Sincronización...",
+            .Location = New System.Drawing.Point(20, 185),
+            .Size = New Size(320, 28),
+            .BackColor = System.Drawing.Color.FromArgb(241, 245, 249),
+            .FlatStyle = FlatStyle.Flat
+        }
+        AddHandler btnAbrirSyncDialog.Click, Sub()
+                                                 Using dlg As New BackupSyncDialog(_invApp)
+                                                     dlg.ShowDialog(Me)
+                                                 End Using
+                                             End Sub
+
+        tab.Controls.AddRange({secBackup, lblLocal, _txtRutaLocalBib, lblServidor, _txtRutaServidorBib, lblIntervalo, _cmbIntervaloBackup, _chkAutoSyncBib, btnAbrirSyncDialog})
+    End Sub
+
     Private Function CrearEncabezadoSeccion(titulo As String, x As Integer, y As Integer) As Control
         Dim pnl As New Panel With {.Location = New System.Drawing.Point(x, y), .Size = New Size(520, 20)}
         Dim lbl As New Label With {
@@ -340,6 +401,11 @@ Public Class OptionsDialog
 
         _cmbTipoBom.SelectedItem = s.TipoBomPredeterminado
         _txtPrefijoExtId.Text = s.PrefijoExternalId
+
+        _txtRutaLocalBib.Text = If(Not String.IsNullOrEmpty(s.RutaLocalBibliotecas), s.RutaLocalBibliotecas, LibraryBackupSyncManager.DEFAULT_LOCAL_PATH)
+        _txtRutaServidorBib.Text = If(Not String.IsNullOrEmpty(s.RutaServidorBibliotecas), s.RutaServidorBibliotecas, LibraryBackupSyncManager.DEFAULT_SERVER_PATH)
+        _cmbIntervaloBackup.SelectedItem = If(Not String.IsNullOrEmpty(s.IntervaloBackupBibliotecas), s.IntervaloBackupBibliotecas, "Diario")
+        _chkAutoSyncBib.Checked = s.AutoSyncBibliotecasAlIniciar
     End Sub
 
     Private Sub GuardarValores()
@@ -371,6 +437,13 @@ Public Class OptionsDialog
             s.TipoBomPredeterminado = _cmbTipoBom.SelectedItem.ToString()
         End If
         s.PrefijoExternalId = _txtPrefijoExtId.Text.Trim()
+
+        s.RutaLocalBibliotecas = _txtRutaLocalBib.Text.Trim()
+        s.RutaServidorBibliotecas = _txtRutaServidorBib.Text.Trim()
+        If _cmbIntervaloBackup.SelectedItem IsNot Nothing Then
+            s.IntervaloBackupBibliotecas = _cmbIntervaloBackup.SelectedItem.ToString()
+        End If
+        s.AutoSyncBibliotecasAlIniciar = _chkAutoSyncBib.Checked
 
         AddinSettings.Save()
     End Sub

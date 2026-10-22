@@ -92,6 +92,15 @@ Public Class AddinSettings
     Public Property PrefijoExternalId As String = "PRJ"
 
     ' ============================================
+    ' 7. BACKUP Y SINCRONIZACIÓN DE BIBLIOTECAS
+    ' ============================================
+    Public Property RutaServidorBibliotecas As String = "\\192.168.0.229\Dpto_Tec\COMERCIALES INVENTOR\DATOS DE DISEÑO INVENTOR\Bibliotecas"
+    Public Property RutaLocalBibliotecas As String = "D:\Bibliotecas"
+    Public Property IntervaloBackupBibliotecas As String = "Diario" ' Manual, Diario, Semanal, Mensual
+    Public Property AutoSyncBibliotecasAlIniciar As Boolean = True
+    Public Property UltimaSincronizacionBibliotecas As DateTime = DateTime.MinValue
+
+    ' ============================================
     ' UBICACIÓN DEL ARCHIVO DE CONFIGURACIÓN
     ' ============================================
     Private Shared ReadOnly Property SettingsPath As String

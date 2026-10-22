@@ -90,6 +90,12 @@ Public Class StartupTasks
         AddHandler _timer.Tick, AddressOf OnMonitorTick
         _timer.Start()
 
+        Try
+            VerificarYEjecutarSyncProgramado()
+        Catch ex As Exception
+            DebugPrint("No se pudo iniciar sync programado: " & ex.Message)
+        End Try
+
         DebugPrint("StartupTasks inicializado con OnNewDocument, OnNewEditObject y UserInputEvents")
     End Sub
 
@@ -686,5 +692,57 @@ Public Class StartupTasks
 
         Return nombre
     End Function
+
+    ' =========================================================
+    ' BACKUP Y SINCRONIZACIÓN AUTOMÁTICA PROGRAMADA DE BIBLIOTECAS
+    ' =========================================================
+    Private Shared Sub VerificarYEjecutarSyncProgramado()
+        Dim cfg = AddinSettings.Current
+        If Not cfg.AutoSyncBibliotecasAlIniciar Then Exit Sub
+
+        Dim intervalo As IntervaloBackupEnum
+        Select Case cfg.IntervaloBackupBibliotecas?.ToUpper()
+            Case "DIARIO"
+                intervalo = IntervaloBackupEnum.Diario
+            Case "SEMANAL"
+                intervalo = IntervaloBackupEnum.Semanal
+            Case "MENSUAL"
+                intervalo = IntervaloBackupEnum.Mensual
+            Case Else
+                Exit Sub
+        End Select
+
+        Dim manager As New LibraryBackupSyncManager(_invApp)
+        If manager.CorrespondeSincronizarAutomaticamente(intervalo, cfg.UltimaSincronizacionBibliotecas) Then
+            Dim localRoot = If(Not String.IsNullOrEmpty(cfg.RutaLocalBibliotecas), cfg.RutaLocalBibliotecas, LibraryBackupSyncManager.DEFAULT_LOCAL_PATH)
+            Dim serverRoot = If(Not String.IsNullOrEmpty(cfg.RutaServidorBibliotecas), cfg.RutaServidorBibliotecas, LibraryBackupSyncManager.DEFAULT_SERVER_PATH)
+
+            If Not IO.Directory.Exists(serverRoot) Then
+                DebugPrint("Servidor de backup no accesible al inicio: " & serverRoot)
+                Exit Sub
+            End If
+
+            System.Threading.ThreadPool.QueueUserWorkItem(Sub()
+                Try
+                    Dim items = manager.CompararArchivos(localRoot, serverRoot)
+                    Dim countPull = items.FindAll(Function(x) x.Status = FileSyncStatusEnum.ServerNewer OrElse x.Status = FileSyncStatusEnum.OnlyOnServer).Count
+
+                    If countPull > 0 Then
+                        Dim n = manager.EjecutarPull(items, localRoot, serverRoot)
+                        cfg.UltimaSincronizacionBibliotecas = DateTime.Now
+                        AddinSettings.Save()
+
+                        WriteLog($"[Backup Programado] Sincronización automática completada: {n} archivo(s) actualizados desde el servidor ({serverRoot}).")
+                    Else
+                        cfg.UltimaSincronizacionBibliotecas = DateTime.Now
+                        AddinSettings.Save()
+                        WriteLog("[Backup Programado] Sincronización automática: archivos locales ya actualizados.")
+                    End If
+                Catch ex As Exception
+                    WriteLog("[Backup Programado] Error: " & ex.Message)
+                End Try
+            End Sub)
+        End If
+    End Sub
 
 End Class

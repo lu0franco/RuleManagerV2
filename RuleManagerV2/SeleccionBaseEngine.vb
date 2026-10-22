@@ -40,11 +40,11 @@ Public Class SeleccionBaseEngine
         If _invApp.ActiveEditDocument IsNot Nothing AndAlso _invApp.ActiveEditDocument.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
             targetDoc = _invApp.ActiveEditDocument
 
-        ' 2. Entorno directo de pieza (.ipt como ActiveDocument)
+            ' 2. Entorno directo de pieza (.ipt como ActiveDocument)
         ElseIf _invApp.ActiveDocument IsNot Nothing AndAlso _invApp.ActiveDocument.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
             targetDoc = _invApp.ActiveDocument
 
-        ' 3. Entorno de ensamblaje (.iam): comprobar si el usuario tiene una ocurrencia de pieza seleccionada en el árbol o visor
+            ' 3. Entorno de ensamblaje (.iam): comprobar si el usuario tiene una ocurrencia de pieza seleccionada en el árbol o visor
         ElseIf _invApp.ActiveDocument IsNot Nothing AndAlso _invApp.ActiveDocument.DocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
             If _invApp.ActiveSelectSet IsNot Nothing AndAlso _invApp.ActiveSelectSet.Count = 1 Then
                 Try
@@ -173,7 +173,7 @@ Public Class SeleccionBaseEngine
                         Try
                             If smDef.ActiveSheetMetalStyle IsNot Nothing AndAlso
                                smDef.ActiveSheetMetalStyle.Name.Equals(dimensionOEstilo, StringComparison.OrdinalIgnoreCase) Then
-                                 debeCambiarEstilo = False ' Ya coincide, no tocar para no regenerar el desarrollo
+                                debeCambiarEstilo = False ' Ya coincide, no tocar para no regenerar el desarrollo
                             End If
                         Catch
                         End Try
@@ -488,10 +488,15 @@ Public Class SeleccionBaseEngine
         Catch
         End Try
 
-        ' 3. Buscar por DisplayName o Name ignorando mayúsculas/minúsculas
+        ' 3. Buscar por DisplayName o InternalName ignorando mayúsculas/minúsculas
         For Each libreria As AssetLibrary In _invApp.AssetLibraries
-            If libreria.DisplayName.Trim().Equals(nombreLimpio, StringComparison.OrdinalIgnoreCase) OrElse
-               libreria.Name.Trim().Equals(nombreLimpio, StringComparison.OrdinalIgnoreCase) Then
+            Dim dName As String = ""
+            Try : dName = libreria.DisplayName : Catch : End Try
+            Dim iName As String = ""
+            Try : iName = libreria.InternalName : Catch : End Try
+
+            If (Not String.IsNullOrEmpty(dName) AndAlso dName.Trim().Equals(nombreLimpio, StringComparison.OrdinalIgnoreCase)) OrElse
+               (Not String.IsNullOrEmpty(iName) AndAlso iName.Trim().Equals(nombreLimpio, StringComparison.OrdinalIgnoreCase)) Then
                 _invApp.ActiveMaterialLibrary = libreria
                 Return libreria
             End If
