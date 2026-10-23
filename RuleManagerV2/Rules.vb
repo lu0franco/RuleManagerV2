@@ -19,12 +19,22 @@ Public Class Rules
     ' REEMPLAZAR el método actual:
     Public Shared Sub EjecutarSComAsign(invApp As Inventor.Application)
         Try
-            ' Opción B: Con visualizador (recomendado)
+            Dim hwnd As IntPtr = IntPtr.Zero
+            Try
+                hwnd = New IntPtr(invApp.MainFrameHWND)
+            Catch
+            End Try
+
             Dim dialog As New ComercialAssignmentDialog(invApp)
-            dialog.ShowDialog()
+            If hwnd <> IntPtr.Zero Then
+                dialog.Show(New WindowWrapper(hwnd))
+            Else
+                dialog.Show()
+            End If
+            dialog.HabilitarVentanaInventor()
 
         Catch ex As Exception
-            MsgBox("Error en Asignar Comerciales: " & ex.Message, MsgBoxStyle.Critical, "Error")
+            MessageBox.Show("Error en Asignar Comerciales: " & ex.Message, "Error - Asignar Comerciales", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 
@@ -37,6 +47,35 @@ Public Class Rules
             engine.Ejecutar()
         Catch ex As Exception
             MessageBox.Show("Error en Asignar Propiedades: " & ex.Message, "Error - Asignar Propiedades", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+
+    End Sub
+
+    Public Shared Sub EjecutarAsignarPadres(
+        invApp As Inventor.Application)
+
+        Try
+            Dim doc As Document = invApp.ActiveDocument
+            If doc Is Nothing OrElse doc.DocumentType <> DocumentTypeEnum.kAssemblyDocumentObject Then
+                MessageBox.Show("El documento activo debe ser un ensamblaje (.iam) para asignar padres y numerar piezas.", "Asignar Padres", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
+
+            Dim hwnd As IntPtr = IntPtr.Zero
+            Try
+                hwnd = New IntPtr(invApp.MainFrameHWND)
+            Catch
+            End Try
+
+            Dim dlg As New AsignarPadresDialog(invApp, DirectCast(doc, AssemblyDocument))
+            If hwnd <> IntPtr.Zero Then
+                dlg.Show(New WindowWrapper(hwnd))
+            Else
+                dlg.Show()
+            End If
+            dlg.HabilitarVentanaInventor()
+        Catch ex As Exception
+            MessageBox.Show("Error en Asignar Padres: " & ex.Message, "Error - Asignar Padres", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
 
     End Sub
@@ -946,6 +985,35 @@ Public Class Rules
             End Using
         Catch ex As Exception
             MessageBox.Show("Error al abrir Sincronización de Bibliotecas: " & ex.Message, "Error - Backup", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    ' ====================================================
+    ' CARGAR DATOS (iProperties de Proyecto)
+    ' ====================================================
+    Public Shared Sub EjecutarCargarDatos(invApp As Inventor.Application)
+        Try
+            If invApp.ActiveDocument Is Nothing Then
+                MessageBox.Show("No hay ningún documento activo en Autodesk Inventor para visualizar o editar datos.",
+                                "Cargar Datos - iProperties", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Exit Sub
+            End If
+
+            Using dlg As New CargarDatosDialog(invApp)
+                Dim hwnd As IntPtr = IntPtr.Zero
+                Try
+                    hwnd = New IntPtr(invApp.MainFrameHWND)
+                Catch
+                End Try
+
+                If hwnd <> IntPtr.Zero Then
+                    dlg.ShowDialog(New WindowWrapper(hwnd))
+                Else
+                    dlg.ShowDialog()
+                End If
+            End Using
+        Catch ex As Exception
+            MessageBox.Show("Error al abrir Cargar Datos: " & ex.Message, "Error - Cargar Datos", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 

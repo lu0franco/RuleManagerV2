@@ -135,6 +135,7 @@ Public Class SobremedidaLargoDialog
         Me.MinimumSize = New Size(850, 520)
         Me.StartPosition = FormStartPosition.CenterScreen
         Me.Font = New Font("Segoe UI", 9.0F)
+        Me.TopMost = True
 
         ' =========================================================
         ' PANEL SUPERIOR: Título, instrucciones y acciones rápidas
@@ -901,6 +902,7 @@ Public Class SobremedidaLargoDialog
                 cam.UpVector = _invApp.TransientGeometry.CreateUnitVector(0, 0, 1)
                 cam.Apply()
                 view.Update()
+                HabilitarVentanaInventor()
             End If
         Catch ex As Exception
         End Try
@@ -1192,6 +1194,7 @@ Public Class SobremedidaLargoDialog
         Else
             dlg.Show()
         End If
+        dlg.HabilitarVentanaInventor()
         Return True
     End Function
 

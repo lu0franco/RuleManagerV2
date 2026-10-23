@@ -53,6 +53,14 @@ Public Class Buttons
         ' =====================================================
 
         _buttonsData.Add(New ButtonData(
+            "Cargar Datos",
+            "BTN_CARGAR_DATOS",
+            "Visualiza y edita rápidamente los datos de proyecto e iProperties del ensamblaje activo (Nº de pieza, Nº de almacenamiento, Proyecto, Diseñador, Proveedor).",
+            "Assembly",
+            AddressOf Rules.EjecutarCargarDatos,
+            "icon_cargar_datos_32x32.png"))
+
+        _buttonsData.Add(New ButtonData(
             "Asignar Comerciales",
             "BTN_COM_ASIGN",
             "Utilice esta herramienta para indicar los comerciales en el ensamblaje.",
@@ -67,6 +75,14 @@ Public Class Buttons
             "Assembly",
             AddressOf Rules.EjecutarPropAsign,
             "icon_asm_asignar_propiedades_32x32.png"))
+
+        _buttonsData.Add(New ButtonData(
+            "Asignar Padres",
+            "BTN_ASIGNAR_PADRES",
+            "Numera sistemáticamente las piezas según su subensamblaje padre contenedor y actualiza las iProperties.",
+            "Assembly",
+            AddressOf Rules.EjecutarAsignarPadres,
+            "icon_asm_asignar_padres_32x32.png"))
 
         _buttonsData.Add(New ButtonData(
             "Buscar Simetrías",
@@ -120,6 +136,14 @@ Public Class Buttons
         ' =====================================================
         ' IPT
         ' =====================================================
+
+        _buttonsData.Add(New ButtonData(
+            "Cargar Datos",
+            "BTN_CARGAR_DATOS_PART",
+            "Visualiza y edita rápidamente los datos de proyecto e iProperties de la pieza activa.",
+            "Part",
+            AddressOf Rules.EjecutarCargarDatos,
+            "icon_cargar_datos_32x32.png"))
 
         _buttonsData.Add(New ButtonData(
             "1) SELECCION BASE",
@@ -426,8 +450,12 @@ Public Class Buttons
                 fileName)
 
         If Not System.IO.File.Exists(iconPath) Then
-            MessageBox.Show("No existe: " & iconPath, "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-            Return Nothing
+            Dim altPath = System.IO.Path.Combine(addinPath, "..", "Icons", fileName)
+            If System.IO.File.Exists(altPath) Then
+                iconPath = altPath
+            Else
+                Return Nothing
+            End If
         End If
 
         Dim bmp As New Bitmap(iconPath)

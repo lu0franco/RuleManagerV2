@@ -76,27 +76,40 @@ Public Class PropAsignEngine
             Catch
             End Try
 
-            ' Si se recolectaron piezas MEC, mostrar el diálogo interactivo de forma no modal (modeless)
-            ' para permitir interactuar libremente con Inventor y con los documentos que se abran.
-            If listaMECItems.Count > 0 Then
-                Dim hwnd As IntPtr = IntPtr.Zero
-                Try
-                    hwnd = New IntPtr(_invApp.MainFrameHWND)
-                Catch
-                End Try
+            ' Obtener handle de Inventor para asociar los diálogos de manera no modal
+            Dim hwnd As IntPtr = IntPtr.Zero
+            Try
+                hwnd = New IntPtr(_invApp.MainFrameHWND)
+            Catch
+            End Try
 
-                Dim dlg As New SobremedidaLargoDialog(_invApp, listaMECItems)
-                If hwnd <> IntPtr.Zero Then
-                    dlg.Show(New WindowWrapper(hwnd))
-                Else
-                    dlg.Show()
-                End If
+            ' Lanzar diálogo interactivo de Asignar Padres de forma no modal (modeless)
+            ' para permitir rotar y maniobrar el modelo 3D en Inventor sin bloqueos.
+            Dim dlgPadres As New AsignarPadresDialog(_invApp, asmDoc)
+
+            If listaMECItems.Count > 0 Then
+                ' Al concluir o cerrar la asignación de padres, encadenar fluidamente la revisión de sobremedida MEC
+                AddHandler dlgPadres.FormClosed, Sub(s, e)
+                                                     Try
+                                                         SobremedidaLargoDialog.EjecutarRevision(_invApp, listaMECItems)
+                                                     Catch
+                                                     End Try
+                                                 End Sub
             Else
-                MessageBox.Show("Se han asignado las propiedades correctamente." & vbCrLf & vbCrLf &
-                                "• Subensamblajes analizados: " & subAssemblyNames.Count & vbCrLf &
-                                "• No se detectaron piezas MEC para sobremedida.",
-                                "Asignar Propiedades", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                AddHandler dlgPadres.FormClosed, Sub(s, e)
+                                                     MessageBox.Show("Se han asignado las propiedades correctamente." & vbCrLf & vbCrLf &
+                                                                     "• Subensamblajes analizados: " & subAssemblyNames.Count & vbCrLf &
+                                                                     "• No se detectaron piezas MEC para sobremedida.",
+                                                                     "Asignar Propiedades", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                                                 End Sub
             End If
+
+            If hwnd <> IntPtr.Zero Then
+                dlgPadres.Show(New WindowWrapper(hwnd))
+            Else
+                dlgPadres.Show()
+            End If
+            dlgPadres.HabilitarVentanaInventor()
 
             Return True
 

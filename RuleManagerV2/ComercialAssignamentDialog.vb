@@ -1,6 +1,8 @@
-﻿Imports System.Windows.Forms
+﻿Imports System
+Imports System.Windows.Forms
 Imports System.Drawing
 Imports System.Linq
+Imports System.Runtime.InteropServices
 Imports Inventor
 
 ''' <summary>
@@ -9,6 +11,26 @@ Imports Inventor
 ''' </summary>
 Public Class ComercialAssignmentDialog
     Inherits Form
+
+    <DllImport("user32.dll")>
+    Private Shared Function EnableWindow(hWnd As IntPtr, bEnable As Boolean) As Boolean
+    End Function
+
+    <DllImport("user32.dll")>
+    Private Shared Function SetForegroundWindow(hWnd As IntPtr) As Boolean
+    End Function
+
+    Public Sub HabilitarVentanaInventor()
+        If _app IsNot Nothing Then
+            Try
+                Dim hwnd As New IntPtr(_app.MainFrameHWND)
+                If hwnd <> IntPtr.Zero Then
+                    EnableWindow(hwnd, True)
+                End If
+            Catch
+            End Try
+        End If
+    End Sub
 
     Private _app As Inventor.Application
     Private _treeData As List(Of NodoComercial)
@@ -51,6 +73,14 @@ Public Class ComercialAssignmentDialog
         Me.Location = New System.Drawing.Point(50, 50)
         Me.MinimumSize = New System.Drawing.Size(500, 400)
         Me.FormBorderStyle = FormBorderStyle.Sizable
+        Me.TopMost = True
+
+        AddHandler Me.Shown, Sub(s, e) HabilitarVentanaInventor()
+        AddHandler Me.Activated, Sub(s, e) HabilitarVentanaInventor()
+        AddHandler Me.FormClosing, Sub(s, e)
+                                       ClearHighlight()
+                                       HabilitarVentanaInventor()
+                                   End Sub
 
         ' --- Panel izquierdo: TreeView ---
         Dim panelArbol As New Panel()
@@ -553,29 +583,33 @@ Public Class ComercialAssignmentDialog
             doc.SelectSet.Select(occ)
 
             Dim view As Inventor.View = _app.ActiveView
-            Dim cam As Camera = view.Camera
-            Dim box As Box = occ.RangeBox
+            If view IsNot Nothing Then
+                Dim cam As Camera = view.Camera
+                Dim box As Box = occ.RangeBox
 
-            Dim center As Inventor.Point = _app.TransientGeometry.CreateSystem.Drawing.Point(
-                (box.MinSystem.Drawing.Point.X + box.MaxSystem.Drawing.Point.X) / 2,
-                (box.MinSystem.Drawing.Point.Y + box.MaxSystem.Drawing.Point.Y) / 2,
-                (box.MinSystem.Drawing.Point.Z + box.MaxSystem.Drawing.Point.Z) / 2)
+                Dim center As Inventor.Point = _app.TransientGeometry.CreatePoint(
+                    (box.MinPoint.X + box.MaxPoint.X) / 2.0,
+                    (box.MinPoint.Y + box.MaxPoint.Y) / 2.0,
+                    (box.MinPoint.Z + box.MaxPoint.Z) / 2.0)
 
-            Dim sizeX As Double = Math.Abs(box.MaxSystem.Drawing.Point.X - box.MinSystem.Drawing.Point.X)
-            Dim sizeY As Double = Math.Abs(box.MaxSystem.Drawing.Point.Y - box.MinSystem.Drawing.Point.Y)
-            Dim sizeZ As Double = Math.Abs(box.MaxSystem.Drawing.Point.Z - box.MinSystem.Drawing.Point.Z)
-            Dim maxSize As Double = Math.Max(sizeX, Math.Max(sizeY, sizeZ))
-            Dim distance As Double = Math.Max(maxSize * 2.5, 10)
+                Dim sizeX As Double = Math.Abs(box.MaxPoint.X - box.MinPoint.X)
+                Dim sizeY As Double = Math.Abs(box.MaxPoint.Y - box.MinPoint.Y)
+                Dim sizeZ As Double = Math.Abs(box.MaxPoint.Z - box.MinPoint.Z)
+                Dim maxSize As Double = Math.Max(sizeX, Math.Max(sizeY, sizeZ))
+                Dim distance As Double = Math.Max(maxSize * 2.5, 10.0)
 
-            cam.TargetSystem.Drawing.Point = center
-            cam.EyeSystem.Drawing.Point = _app.TransientGeometry.CreateSystem.Drawing.Point(
-                center.X + distance,
-                center.Y + distance,
-                center.Z + distance)
-            cam.UpVector = _app.TransientGeometry.CreateUnitVector(0, 0, 1)
-            cam.Apply()
+                cam.Target = center
+                cam.Eye = _app.TransientGeometry.CreatePoint(
+                    center.X + distance,
+                    center.Y + distance,
+                    center.Z + distance)
+                cam.UpVector = _app.TransientGeometry.CreateUnitVector(0, 0, 1)
+                cam.Apply()
+                view.Update()
+            End If
 
             doc.SelectSet.Clear()
+            HabilitarVentanaInventor()
         Catch
         End Try
     End Sub
@@ -846,6 +880,7 @@ Public Class ComercialAssignmentDialog
         hs.Clear()
         RecorrerComHighlight(asmDoc.ComponentDefinition.Occurrences, hs)
         _app.ActiveView.Update()
+        HabilitarVentanaInventor()
     End Sub
 
     Private Sub RecorrerComHighlight(occs As ComponentOccurrences, hs As HighlightSet)
@@ -882,6 +917,7 @@ Public Class ComercialAssignmentDialog
         Dim asmDoc As AssemblyDocument = CType(doc, AssemblyDocument)
         RecorrerToggleHighlight(asmDoc.ComponentDefinition.Occurrences, key, hs, quitar)
         _app.ActiveView.Update()
+        HabilitarVentanaInventor()
     End Sub
 
     Private Sub RecorrerToggleHighlight(occs As ComponentOccurrences, key As String, hs As HighlightSet, quitar As Boolean)
@@ -912,6 +948,7 @@ Public Class ComercialAssignmentDialog
             Try : hs.Remove(occ) : Catch : End Try
         End If
         _app.ActiveView.Update()
+        HabilitarVentanaInventor()
     End Sub
 
     Private Function OccEstaResaltada(hs As HighlightSet, occ As ComponentOccurrence) As Boolean
@@ -929,6 +966,7 @@ Public Class ComercialAssignmentDialog
             Try
                 _highlightSet.Clear()
                 _app.ActiveView.Update()
+                HabilitarVentanaInventor()
             Catch
             End Try
         End If
