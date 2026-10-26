@@ -249,7 +249,7 @@ Public Class StartupTasks
         Try
             Dim drawDoc As DrawingDocument = DirectCast(DocumentObject, DrawingDocument)
             Dim sheet As Sheet = drawDoc.ActiveSheet
-            If sheet IsNot Nothing AndAlso sheet.DrawingViews.Count = 1 AndAlso sheet.PartsLists.Count = 0 Then
+            If sheet IsNot Nothing AndAlso sheet.DrawingViews.Count >= 1 AndAlso sheet.PartsLists.Count = 0 Then
                 AutoPartsListManager.NotificarComandoFinalizado(drawDoc)
             End If
         Catch ex As Exception

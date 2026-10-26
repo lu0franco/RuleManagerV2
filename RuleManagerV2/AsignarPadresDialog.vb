@@ -96,15 +96,7 @@ Public Class ElementoPadreItem
 
     Public ReadOnly Property IconoPrefix As String
         Get
-            If IsCommercial Then
-                Return "📦 "
-            ElseIf IsContentCenter Then
-                Return "🔩 "
-            ElseIf IsAssembly Then
-                Return "📁 "
-            Else
-                Return "📄 "
-            End If
+            Return ""
         End Get
     End Property
 
@@ -114,7 +106,7 @@ Public Class ElementoPadreItem
             If Level > 1 Then
                 indent = New String(" "c, (Level - 1) * 3) & "└── "
             End If
-            Return indent & IconoPrefix & DisplayName
+            Return indent & DisplayName
         End Get
     End Property
 
@@ -308,7 +300,7 @@ Public Class AsignarPadresDialog
 
         ' Acciones superiores derechas: Mantener al frente, Marcar, Desmarcar, Renumerar
         chkTopMost = New CheckBox() With {
-            .Text = "📌 Al frente",
+            .Text = "Al frente",
             .Checked = True,
             .Location = New Point(pnlTop.Width - 485, 8),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
@@ -321,7 +313,7 @@ Public Class AsignarPadresDialog
         pnlTop.Controls.Add(chkTopMost)
 
         btnMarcarTodos = New Button() With {
-            .Text = "☑ Marcar Todos",
+            .Text = "Marcar Todos",
             .Size = New Size(115, 26),
             .Location = New Point(pnlTop.Width - 375, 8),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
@@ -336,7 +328,7 @@ Public Class AsignarPadresDialog
         pnlTop.Controls.Add(btnMarcarTodos)
 
         btnDesmarcarTodos = New Button() With {
-            .Text = "☐ Desmarcar",
+            .Text = "Desmarcar",
             .Size = New Size(100, 26),
             .Location = New Point(pnlTop.Width - 252, 8),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
@@ -351,7 +343,7 @@ Public Class AsignarPadresDialog
         pnlTop.Controls.Add(btnDesmarcarTodos)
 
         btnAutoNumerar = New Button() With {
-            .Text = "🔄 Renumerar",
+            .Text = "Renumerar",
             .Size = New Size(115, 26),
             .Location = New Point(pnlTop.Width - 144, 8),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
@@ -642,7 +634,7 @@ Public Class AsignarPadresDialog
         grpPreview.Controls.Add(lblDetallePropuesto)
 
         btnZoom = New Button() With {
-            .Text = "🔍 Hacer Zoom en 3D",
+            .Text = "Hacer Zoom en 3D",
             .Location = New Point(15, 352),
             .Size = New Size(215, 32),
             .BackColor = Color.White,
@@ -656,7 +648,7 @@ Public Class AsignarPadresDialog
         grpPreview.Controls.Add(btnZoom)
 
         btnAbrir = New Button() With {
-            .Text = "📂 Abrir Elemento",
+            .Text = "Abrir Elemento",
             .Location = New Point(15, 388),
             .Size = New Size(215, 32),
             .BackColor = Color.White,
@@ -670,7 +662,7 @@ Public Class AsignarPadresDialog
         grpPreview.Controls.Add(btnAbrir)
 
         Dim lblTip As New Label() With {
-            .Text = "💡 Tip: Doble clic en cualquier nodo o fila para centrar y rotar libremente en la vista 3D.",
+            .Text = "Tip: Doble clic en cualquier nodo o fila para centrar y rotar libremente en la vista 3D.",
             .Location = New Point(15, 428),
             .Size = New Size(215, 42),
             .Font = New Font("Segoe UI", 7.5F, FontStyle.Italic),
@@ -679,7 +671,7 @@ Public Class AsignarPadresDialog
         grpPreview.Controls.Add(lblTip)
 
         btnAceptarLateral = New Button() With {
-            .Text = "✔️ Aceptar y Aplicar",
+            .Text = "Aceptar y Aplicar",
             .Location = New Point(15, 480),
             .Size = New Size(215, 34),
             .BackColor = Color.FromArgb(2, 132, 199),
@@ -693,7 +685,7 @@ Public Class AsignarPadresDialog
         grpPreview.Controls.Add(btnAceptarLateral)
 
         btnCancelarLateral = New Button() With {
-            .Text = "✖️ Cancelar",
+            .Text = "Cancelar",
             .Location = New Point(15, 520),
             .Size = New Size(215, 30),
             .BackColor = Color.White,
@@ -803,7 +795,7 @@ Public Class AsignarPadresDialog
         }
 
         Dim lblTreeTitle As New Label() With {
-            .Text = "🌳 Estructura de Ensamblaje",
+            .Text = "Estructura de Ensamblaje",
             .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
             .ForeColor = Color.FromArgb(30, 41, 59),
             .Location = New Point(8, 6),
@@ -812,11 +804,11 @@ Public Class AsignarPadresDialog
         pnlTreeHeader.Controls.Add(lblTreeTitle)
 
         btnTreeExpandAll = New Button() With {
-            .Text = "➕",
-            .Size = New Size(30, 24),
-            .Location = New Point(185, 4),
+            .Text = "+",
+            .Size = New Size(26, 24),
+            .Location = New Point(180, 4),
             .BackColor = Color.White,
-            .Font = New Font("Segoe UI", 8.0F, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
@@ -830,11 +822,11 @@ Public Class AsignarPadresDialog
         pnlTreeHeader.Controls.Add(btnTreeExpandAll)
 
         btnTreeCollapseAll = New Button() With {
-            .Text = "➖",
-            .Size = New Size(30, 24),
-            .Location = New Point(218, 4),
+            .Text = "-",
+            .Size = New Size(26, 24),
+            .Location = New Point(210, 4),
             .BackColor = Color.White,
-            .Font = New Font("Segoe UI", 8.0F, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
@@ -848,9 +840,9 @@ Public Class AsignarPadresDialog
         pnlTreeHeader.Controls.Add(btnTreeCollapseAll)
 
         btnTreeReset = New Button() With {
-            .Text = "🌐",
-            .Size = New Size(30, 24),
-            .Location = New Point(251, 4),
+            .Text = "Todo",
+            .Size = New Size(42, 24),
+            .Location = New Point(240, 4),
             .BackColor = Color.White,
             .Font = New Font("Segoe UI", 8.0F, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
@@ -997,7 +989,7 @@ Public Class AsignarPadresDialog
         }
         _grid.Columns.Add(colNivel)
 
-        ' Columna Componente / Archivo (con formato de rama 📁/📄)
+        ' Columna Componente / Archivo (con formato de rama)
         Dim colArchivo As New DataGridViewTextBoxColumn() With {
             .Name = "ColArchivo",
             .HeaderText = "Componente / Rama Jerárquica",
@@ -1662,7 +1654,7 @@ Public Class AsignarPadresDialog
 
     ''' <summary>
     ''' Construye la estructura de carpetas y ramas jerárquicas en el TreeView.
-    ''' Agrupa las partes bajo su respectivo ensamble o subensamblaje con íconos de carpetas 📁 y piezas 📄.
+    ''' Agrupa las partes bajo su respectivo ensamble o subensamblaje con estructura jerárquica.
     ''' Aísla los componentes comerciales (COM) en ramas dedicadas para que no interfieran con la numeración de los padres.
     ''' </summary>
     Private Sub ConstruirArbolJerarquico()
@@ -1673,7 +1665,7 @@ Public Class AsignarPadresDialog
         Dim docNombre As String = If(_asmDoc IsNot Nothing, IOPath.GetFileName(_asmDoc.FullFileName), "Ensamblaje Principal")
 
         ' Nodo raíz del ensamblaje
-        Dim rootNode As New TreeNode("📁 " & docNombre & " [" & rootCode & "]") With {
+        Dim rootNode As New TreeNode(docNombre & " [" & rootCode & "]") With {
             .Tag = Nothing,
             .NodeFont = New Font("Segoe UI", 8.5F, FontStyle.Bold)
         }
@@ -1761,7 +1753,7 @@ Public Class AsignarPadresDialog
                 pNode = dictAsmNodes(kvp.Key)
             End If
 
-            Dim nodoCarpetaCom As New TreeNode("📦 Componentes Comerciales (COM) (" & kvp.Value.Count & ")") With {
+            Dim nodoCarpetaCom As New TreeNode("Componentes Comerciales (COM) (" & kvp.Value.Count & ")") With {
                 .Tag = Nothing,
                 .NodeFont = New Font("Segoe UI", 8.0F, FontStyle.Bold),
                 .ForeColor = Color.FromArgb(5, 150, 105)
@@ -1769,7 +1761,7 @@ Public Class AsignarPadresDialog
             pNode.Nodes.Add(nodoCarpetaCom)
 
             For Each comItem In kvp.Value
-                Dim etiq As String = "📦 " & comItem.DisplayName
+                Dim etiq As String = comItem.DisplayName
                 Dim comCod As String = comItem.CodigoComercial
                 If Not String.IsNullOrEmpty(comCod) Then
                     etiq &= " [" & comCod & "]"
@@ -1802,7 +1794,7 @@ Public Class AsignarPadresDialog
                 pNode = dictAsmNodes(kvp.Key)
             End If
 
-            Dim nodoCarpetaCC As New TreeNode("🔩 Tornillería y Content Center (CC) (" & kvp.Value.Count & ")") With {
+            Dim nodoCarpetaCC As New TreeNode("Tornillería y Content Center (CC) (" & kvp.Value.Count & ")") With {
                 .Tag = Nothing,
                 .NodeFont = New Font("Segoe UI", 8.0F, FontStyle.Italic),
                 .ForeColor = Color.FromArgb(100, 116, 139)
@@ -1810,7 +1802,7 @@ Public Class AsignarPadresDialog
             pNode.Nodes.Add(nodoCarpetaCC)
 
             For Each ccItem In kvp.Value
-                Dim etiq As String = "🔩 " & ccItem.DisplayName
+                Dim etiq As String = ccItem.DisplayName
                 If ccItem.Quantity > 1 Then etiq &= " x" & ccItem.Quantity
                 Dim nodoCC As New TreeNode(etiq) With {
                     .Tag = ccItem,

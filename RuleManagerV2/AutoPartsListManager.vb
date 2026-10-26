@@ -72,11 +72,12 @@ Public Class AutoPartsListManager
                 Return False
             End If
 
-            ' 2. Regla clave del usuario:
-            ' "al insertar una vista en una hoja que NO tenga una vista previa (es decir que la que metemos es la primera)"
+            ' 2. Regla de activación:
+            ' Se dispara cuando se inserta una vista o múltiples vistas simultáneamente (por ejemplo: vista base + proyectada)
+            ' en una hoja que no cuenta aún con una lista de piezas (sheet.PartsLists.Count = 0).
             If Not forzar Then
-                If targetSheet.DrawingViews.Count <> 1 Then
-                    Log($"Hoja '{targetSheet.Name}' tiene {targetSheet.DrawingViews.Count} vistas. No es la primera vista. Se omite.")
+                If targetSheet.DrawingViews.Count = 0 Then
+                    Log($"Hoja '{targetSheet.Name}' no contiene ninguna vista. Se omite.")
                     Return False
                 End If
 
@@ -92,8 +93,22 @@ Public Class AutoPartsListManager
                 End If
             End If
 
-            ' 3. Obtener la primera vista de la hoja
-            Dim oView As DrawingView = targetSheet.DrawingViews.Item(1)
+            ' 3. Obtener la vista base principal de la hoja (si hay múltiples vistas insertadas, preferir la vista base sin ParentView)
+            Dim oView As DrawingView = Nothing
+            For Each v As DrawingView In targetSheet.DrawingViews
+                Try
+                    If v.ParentView Is Nothing Then
+                        oView = v
+                        Exit For
+                    End If
+                Catch
+                End Try
+            Next
+
+            If oView Is Nothing AndAlso targetSheet.DrawingViews.Count > 0 Then
+                oView = targetSheet.DrawingViews.Item(1)
+            End If
+
             If oView Is Nothing Then
                 Log("No se pudo obtener la vista de la hoja.")
                 Return False
