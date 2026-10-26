@@ -77,6 +77,12 @@ Public Class StartupTasks
         AddHandler _appEvents.OnActiveProjectChanged, AddressOf OnActiveProjectChanged
         AddHandler _appEvents.OnNewDocument, AddressOf OnNewDocument
         AddHandler _appEvents.OnNewEditObject, AddressOf OnNewEditObject
+        AddHandler _appEvents.OnDocumentChange, AddressOf OnDocumentChange
+
+        Try
+            AutoPartsListManager.Initialize(_invApp)
+        Catch
+        End Try
 
         Try
             _userInputEvents = _invApp.CommandManager.UserInputEvents
@@ -96,7 +102,7 @@ Public Class StartupTasks
             DebugPrint("No se pudo iniciar sync programado: " & ex.Message)
         End Try
 
-        DebugPrint("StartupTasks inicializado con OnNewDocument, OnNewEditObject y UserInputEvents")
+        DebugPrint("StartupTasks inicializado con OnNewDocument, OnNewEditObject, OnDocumentChange y UserInputEvents")
     End Sub
 
     Public Shared Sub Shutdown()
@@ -105,6 +111,7 @@ Public Class StartupTasks
                 RemoveHandler _appEvents.OnActiveProjectChanged, AddressOf OnActiveProjectChanged
                 RemoveHandler _appEvents.OnNewDocument, AddressOf OnNewDocument
                 RemoveHandler _appEvents.OnNewEditObject, AddressOf OnNewEditObject
+                RemoveHandler _appEvents.OnDocumentChange, AddressOf OnDocumentChange
             End If
             If _userInputEvents IsNot Nothing Then
                 RemoveHandler _userInputEvents.OnTerminateCommand, AddressOf OnCommandTerminate
@@ -177,34 +184,76 @@ Public Class StartupTasks
     End Sub
 
     ' =========================================================
-    ' EVENTO 3: TERMINACIÓN DE COMANDO NATIVO DE CREACIÓN IN SITU
+    ' EVENTO 3: TERMINACIÓN DE COMANDOS (CREACIÓN IN SITU & VISTAS DE DIBUJO)
     ' =========================================================
     Private Shared Sub OnCommandTerminate(
         ByVal CommandName As String,
         ByVal Context As NameValueMap)
 
-        If Not AddinSettings.Current.ActivarSeleccionBaseEnPlantilla Then Exit Sub
-
         Try
             If String.IsNullOrEmpty(CommandName) Then Exit Sub
-
-            ' Comandos nativos de Inventor de creación in situ dentro de ensamblaje
             Dim cmdUpper As String = CommandName.ToUpper()
-            If cmdUpper.Contains("ASSEMBLYCREATECOMPONENT") OrElse
-               cmdUpper.Contains("ASSEMBLYCREATEINPLACE") OrElse
-               cmdUpper = "ASSEMBLYCREATECOMPONENTCMD" Then
 
-                DebugPrint("Comando creación in situ detectado: " & CommandName)
+            ' A) COMANDOS DE INSERCIÓN DE VISTAS EN DIBUJO (.IDW / .DWG)
+            If cmdUpper.Contains("DRAWINGBASEVIEW") OrElse
+               cmdUpper.Contains("DRAWINGVIEW") OrElse
+               cmdUpper.Contains("DRAWINGPROJECTED") OrElse
+               cmdUpper = "DRAWINGBASEVIEWCMD" Then
 
-                ' En este instante Inventor ya colocó la nueva pieza y está activa en ActiveEditDocument
-                If _invApp.ActiveEditDocument IsNot Nothing AndAlso
-                   _invApp.ActiveEditDocument.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
-
-                    VerificarYEjecutarSeleccionBaseParaPieza(_invApp.ActiveEditDocument, "OnCommandTerminate (In Situ)", Context, True)
+                If AddinSettings.Current.AutoInsertarListaPiezas Then
+                    If _invApp.ActiveDocument IsNot Nothing AndAlso
+                       _invApp.ActiveDocument.DocumentType = DocumentTypeEnum.kDrawingDocumentObject Then
+                        DebugPrint("Comando de vista detectado (" & CommandName & ") -> Verificando inserción de Lista de Piezas...")
+                        AutoPartsListManager.NotificarComandoFinalizado(DirectCast(_invApp.ActiveDocument, DrawingDocument))
+                    End If
                 End If
             End If
+
+            ' B) COMANDOS NATIVOS DE CREACIÓN IN SITU DENTRO DE ENSAMBLAJE
+            If AddinSettings.Current.ActivarSeleccionBaseEnPlantilla Then
+                If cmdUpper.Contains("ASSEMBLYCREATECOMPONENT") OrElse
+                   cmdUpper.Contains("ASSEMBLYCREATEINPLACE") OrElse
+                   cmdUpper = "ASSEMBLYCREATECOMPONENTCMD" Then
+
+                    DebugPrint("Comando creación in situ detectado: " & CommandName)
+
+                    ' En este instante Inventor ya colocó la nueva pieza y está activa en ActiveEditDocument
+                    If _invApp.ActiveEditDocument IsNot Nothing AndAlso
+                       _invApp.ActiveEditDocument.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
+
+                        VerificarYEjecutarSeleccionBaseParaPieza(_invApp.ActiveEditDocument, "OnCommandTerminate (In Situ)", Context, True)
+                    End If
+                End If
+            End If
+
         Catch ex As Exception
             DebugPrint("Excepción en OnCommandTerminate: " & ex.Message)
+        End Try
+    End Sub
+
+    ' =========================================================
+    ' EVENTO 4: MODIFICACIÓN DE DOCUMENTO (DETECCIÓN DE VISTA DE DIBUJO)
+    ' =========================================================
+    Private Shared Sub OnDocumentChange(
+        ByVal DocumentObject As Inventor._Document,
+        ByVal BeforeOrAfter As EventTimingEnum,
+        ByVal ReasonsForChange As CommandTypesEnum,
+        ByVal Context As NameValueMap,
+        ByRef HandlingCode As HandlingCodeEnum)
+
+        If BeforeOrAfter <> EventTimingEnum.kAfter Then Exit Sub
+        If DocumentObject Is Nothing Then Exit Sub
+        If DocumentObject.DocumentType <> DocumentTypeEnum.kDrawingDocumentObject Then Exit Sub
+        If Not AddinSettings.Current.AutoInsertarListaPiezas Then Exit Sub
+
+        Try
+            Dim drawDoc As DrawingDocument = DirectCast(DocumentObject, DrawingDocument)
+            Dim sheet As Sheet = drawDoc.ActiveSheet
+            If sheet IsNot Nothing AndAlso sheet.DrawingViews.Count = 1 AndAlso sheet.PartsLists.Count = 0 Then
+                AutoPartsListManager.NotificarComandoFinalizado(drawDoc)
+            End If
+        Catch ex As Exception
+            DebugPrint("Excepción en OnDocumentChange: " & ex.Message)
         End Try
     End Sub
 
@@ -723,25 +772,25 @@ Public Class StartupTasks
             End If
 
             System.Threading.ThreadPool.QueueUserWorkItem(Sub()
-                Try
-                    Dim items = manager.CompararArchivos(localRoot, serverRoot)
-                    Dim countPull = items.FindAll(Function(x) x.Status = FileSyncStatusEnum.ServerNewer OrElse x.Status = FileSyncStatusEnum.OnlyOnServer).Count
+                                                              Try
+                                                                  Dim items = manager.CompararArchivos(localRoot, serverRoot)
+                                                                  Dim countPull = items.FindAll(Function(x) x.Status = FileSyncStatusEnum.ServerNewer OrElse x.Status = FileSyncStatusEnum.OnlyOnServer).Count
 
-                    If countPull > 0 Then
-                        Dim n = manager.EjecutarPull(items, localRoot, serverRoot)
-                        cfg.UltimaSincronizacionBibliotecas = DateTime.Now
-                        AddinSettings.Save()
+                                                                  If countPull > 0 Then
+                                                                      Dim n = manager.EjecutarPull(items, localRoot, serverRoot)
+                                                                      cfg.UltimaSincronizacionBibliotecas = DateTime.Now
+                                                                      AddinSettings.Save()
 
-                        WriteLog($"[Backup Programado] Sincronización automática completada: {n} archivo(s) actualizados desde el servidor ({serverRoot}).")
-                    Else
-                        cfg.UltimaSincronizacionBibliotecas = DateTime.Now
-                        AddinSettings.Save()
-                        WriteLog("[Backup Programado] Sincronización automática: archivos locales ya actualizados.")
-                    End If
-                Catch ex As Exception
-                    WriteLog("[Backup Programado] Error: " & ex.Message)
-                End Try
-            End Sub)
+                                                                      WriteLog($"[Backup Programado] Sincronización automática completada: {n} archivo(s) actualizados desde el servidor ({serverRoot}).")
+                                                                  Else
+                                                                      cfg.UltimaSincronizacionBibliotecas = DateTime.Now
+                                                                      AddinSettings.Save()
+                                                                      WriteLog("[Backup Programado] Sincronización automática: archivos locales ya actualizados.")
+                                                                  End If
+                                                              Catch ex As Exception
+                                                                  WriteLog("[Backup Programado] Error: " & ex.Message)
+                                                              End Try
+                                                          End Sub)
         End If
     End Sub
 

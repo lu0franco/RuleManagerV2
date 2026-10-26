@@ -83,33 +83,19 @@ Public Class PropAsignEngine
             Catch
             End Try
 
-            ' Lanzar diálogo interactivo de Asignar Padres de forma no modal (modeless)
-            ' para permitir rotar y maniobrar el modelo 3D en Inventor sin bloqueos.
-            Dim dlgPadres As New AsignarPadresDialog(_invApp, asmDoc)
-
+            ' Gestionar revisión de sobremedida MEC si corresponde, sin encadenar Asignar Padres
             If listaMECItems.Count > 0 Then
-                ' Al concluir o cerrar la asignación de padres, encadenar fluidamente la revisión de sobremedida MEC
-                AddHandler dlgPadres.FormClosed, Sub(s, e)
-                                                     Try
-                                                         SobremedidaLargoDialog.EjecutarRevision(_invApp, listaMECItems)
-                                                     Catch
-                                                     End Try
-                                                 End Sub
+                Try
+                    SobremedidaLargoDialog.EjecutarRevision(_invApp, listaMECItems)
+                Catch
+                End Try
             Else
-                AddHandler dlgPadres.FormClosed, Sub(s, e)
-                                                     MessageBox.Show("Se han asignado las propiedades correctamente." & vbCrLf & vbCrLf &
-                                                                     "• Subensamblajes analizados: " & subAssemblyNames.Count & vbCrLf &
-                                                                     "• No se detectaron piezas MEC para sobremedida.",
-                                                                     "Asignar Propiedades", MessageBoxButtons.OK, MessageBoxIcon.Information)
-                                                 End Sub
+                MessageBox.Show("Se han asignado las propiedades correctamente a las piezas de fabricación." & vbCrLf & vbCrLf &
+                                "• Subensamblajes analizados: " & subAssemblyNames.Count & vbCrLf &
+                                "• Piezas COMERCIAL, FANTASMA y REFERENCIA omitidas en la BOM." & vbCrLf &
+                                "• No se detectaron piezas MEC para sobremedida.",
+                                "Asignar Propiedades", MessageBoxButtons.OK, MessageBoxIcon.Information)
             End If
-
-            If hwnd <> IntPtr.Zero Then
-                dlgPadres.Show(New WindowWrapper(hwnd))
-            Else
-                dlgPadres.Show()
-            End If
-            dlgPadres.HabilitarVentanaInventor()
 
             Return True
 
@@ -122,6 +108,7 @@ Public Class PropAsignEngine
 
     ''' <summary>
     ''' Recorre recursivamente todas las ocurrencias del ensamblaje o subensamblaje.
+    ''' Excluye piezas definidas como COMERCIAL (Purchased), FANTASMA (Phantom) o REFERENCIA (Reference).
     ''' </summary>
     Private Sub AnalyzeSubAssemblies(compDef As ComponentDefinition,
                                     ByRef subAssemblyNames As List(Of String),
@@ -137,9 +124,35 @@ Public Class PropAsignEngine
         For Each oOcc As ComponentOccurrence In compDef.Occurrences
             If oOcc.Suppressed Then Continue For
             If Not oOcc.Visible Then Continue For
-            If oOcc.BOMStructure = BOMStructureEnum.kReferenceBOMStructure Then Continue For
 
-            ' Omitir miembros del Centro de Contenido
+            ' 1. EXCLUSIÓN BOM: Omitir Comercial (Purchased) o Referencia (Reference)
+            Dim bomStruct As BOMStructureEnum = ObtenerEstructuraBOM(oOcc)
+            If bomStruct = BOMStructureEnum.kPurchasedBOMStructure OrElse
+               bomStruct = BOMStructureEnum.kReferenceBOMStructure Then
+                Continue For
+            End If
+
+            ' 2. Omitir piezas con marca comercial COM = "✓"
+            If EsComponenteComercial(oOcc) Then
+                Continue For
+            End If
+
+            ' 3. Omitir Fantasma (si es subensamblaje fantasma, no se procesa el ensamble en sí pero se analizan sus hijos de fabricación)
+            If bomStruct = BOMStructureEnum.kPhantomBOMStructure Then
+                If oOcc.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
+                    Dim phantomCompDef As AssemblyComponentDefinition = Nothing
+                    Try
+                        phantomCompDef = DirectCast(oOcc.Definition, AssemblyComponentDefinition)
+                    Catch
+                    End Try
+                    If phantomCompDef IsNot Nothing Then
+                        AnalyzeSubAssemblies(phantomCompDef, subAssemblyNames, descripcion, cliente, listaMECItems, dictConsultasMEC, oProgressBar)
+                    End If
+                End If
+                Continue For
+            End If
+
+            ' 4. Omitir miembros del Centro de Contenido
             If oOcc.DefinitionDocumentType = DocumentTypeEnum.kPartDocumentObject Then
                 Try
                     If oOcc.Definition.IsContentMember Then
@@ -544,6 +557,54 @@ Public Class PropAsignEngine
         Catch
         End Try
     End Sub
+
+    ''' <summary>
+    ''' Evalúa si una ocurrencia está marcada como comercial (COM = "✓", "SI", etc.)
+    ''' </summary>
+    Private Function EsComponenteComercial(oOcc As ComponentOccurrence) As Boolean
+        Try
+            If oOcc Is Nothing OrElse oOcc.Definition Is Nothing OrElse oOcc.Definition.Document Is Nothing Then Return False
+            Dim doc As Document = oOcc.Definition.Document
+            Dim customProps As PropertySet = Nothing
+            Try
+                customProps = doc.PropertySets.Item("Inventor User Defined Properties")
+            Catch
+            End Try
+
+            If customProps IsNot Nothing Then
+                For Each prop As Inventor.Property In customProps
+                    If String.Equals(prop.Name, "COM", StringComparison.OrdinalIgnoreCase) Then
+                        Dim val As String = CStr(prop.Value)
+                        If Not String.IsNullOrEmpty(val) AndAlso (val.Contains("✓") OrElse val.Contains("✔") OrElse val.Contains("√") OrElse
+                           String.Equals(val, "SI", StringComparison.OrdinalIgnoreCase) OrElse
+                           String.Equals(val, "TRUE", StringComparison.OrdinalIgnoreCase)) Then
+                            Return True
+                        End If
+                    End If
+                Next
+            End If
+        Catch
+        End Try
+        Return False
+    End Function
+
+    ''' <summary>
+    ''' Obtiene la estructura BOM efectiva del componente considerando tanto
+    ''' la ocurrencia en el ensamble como la definición base del documento.
+    ''' </summary>
+    Private Function ObtenerEstructuraBOM(oOcc As ComponentOccurrence) As BOMStructureEnum
+        Try
+            If oOcc Is Nothing Then Return BOMStructureEnum.kNormalBOMStructure
+            If oOcc.BOMStructure <> BOMStructureEnum.kDefaultBOMStructure Then
+                Return oOcc.BOMStructure
+            End If
+            If oOcc.Definition IsNot Nothing Then
+                Return oOcc.Definition.BOMStructure
+            End If
+        Catch
+        End Try
+        Return BOMStructureEnum.kNormalBOMStructure
+    End Function
 
     ''' <summary>
     ''' Asigna un valor a una propiedad de forma segura evitando excepciones.

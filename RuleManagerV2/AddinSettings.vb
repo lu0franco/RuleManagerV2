@@ -26,11 +26,18 @@ Public Class AddinSettings
     Public Property AbrirCarpetaAlTerminar As Boolean = True
 
     ' ============================================
-    ' 3. PLANOS (IDW)
+    ' 3. PLANOS (IDW) & LISTAS DE PIEZAS
     ' ============================================
     Public Property FormatoPdfPredeterminado As String = "B3"
     Public Property OrdenarHojasAuto As Boolean = True
     Public Property PlantillaLdmExcel As String = "REQUERIMIENTO DE MATERIALESV5.xlsx"
+
+    ' Inserción automática de Lista de Piezas en primera vista de la hoja
+    Public Property AutoInsertarListaPiezas As Boolean = True
+    Public Property EstiloListaPiezasPieza As String = "Copia de PIEZAS"
+    Public Property EstiloListaPiezasEnsamblaje As String = "Copia de ENSAMBLAJE"
+    Public Property UbicacionListaPiezas As String = "SobreRotulo" ' "SobreRotulo", "SuperiorDerecha", "SuperiorIzquierda", "InferiorIzquierda"
+    Public Property NivelBomEnsamblaje As String = "Estructurado"     ' "Estructurado", "SoloPiezas"
 
     ' ============================================
     ' 4. PIEZA (IPT) & SELECCIÓN BASE

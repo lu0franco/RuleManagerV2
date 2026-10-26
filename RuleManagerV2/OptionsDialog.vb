@@ -1,5 +1,9 @@
+Imports System
+Imports System.Collections.Generic
 Imports System.Drawing
 Imports System.Windows.Forms
+Imports Inventor
+Imports TextBox = System.Windows.Forms.TextBox
 
 ''' <summary>
 ''' Diálogo de Opciones del Add-In RuleManager V2.
@@ -21,7 +25,12 @@ Public Class OptionsDialog
     Private _chkDetectarSim As CheckBox
     Private _chkActualizarCant As CheckBox
 
-    ' Controles - Tab Planos
+    ' Controles - Tab Planos (Dibujo)
+    Private _chkAutoListaPiezas As CheckBox
+    Private _cmbEstiloPieza As ComboBox
+    Private _cmbEstiloEnsamblaje As ComboBox
+    Private _cmbUbicacionListaPiezas As ComboBox
+    Private _cmbNivelBom As ComboBox
     Private _cmbFormatoPdf As ComboBox
     Private _chkOrdenarHojas As CheckBox
     Private _txtPlantillaExcel As TextBox
@@ -73,7 +82,7 @@ Public Class OptionsDialog
         MaximizeBox = False
         MinimizeBox = False
         ShowInTaskbar = False
-        ClientSize = New Size(580, 420)
+        ClientSize = New Size(620, 500)
         Font = New Font("Segoe UI", 9.0F)
 
         InitializeComponent()
@@ -84,7 +93,7 @@ Public Class OptionsDialog
         ' --- TabControl Principal ---
         _tabControl = New TabControl With {
             .Location = New System.Drawing.Point(10, 10),
-            .Size = New Size(560, 355),
+            .Size = New Size(595, 435),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Bottom
         }
 
@@ -116,38 +125,38 @@ Public Class OptionsDialog
         Controls.Add(_tabControl)
 
         ' --- Botones Inferiores ---
-        Dim yBtn As Integer = 375
+        Dim yBtn As Integer = 455
 
         _btnImportar = New Button With {
             .Text = "Importar...",
             .Location = New System.Drawing.Point(12, yBtn),
-            .Size = New Size(85, 26)
+            .Size = New Size(85, 28)
         }
 
         _btnExportar = New Button With {
             .Text = "Exportar...",
             .Location = New System.Drawing.Point(102, yBtn),
-            .Size = New Size(85, 26)
+            .Size = New Size(85, 28)
         }
 
         _btnAceptar = New Button With {
             .Text = "Aceptar",
-            .Location = New System.Drawing.Point(310, yBtn),
-            .Size = New Size(80, 26)
+            .Location = New System.Drawing.Point(350, yBtn),
+            .Size = New Size(80, 28)
         }
         AddHandler _btnAceptar.Click, AddressOf OnAceptar
 
         _btnCancelar = New Button With {
             .Text = "Cancelar",
             .DialogResult = DialogResult.Cancel,
-            .Location = New System.Drawing.Point(395, yBtn),
-            .Size = New Size(80, 26)
+            .Location = New System.Drawing.Point(435, yBtn),
+            .Size = New Size(80, 28)
         }
 
         _btnAplicar = New Button With {
             .Text = "Aplicar",
-            .Location = New System.Drawing.Point(480, yBtn),
-            .Size = New Size(80, 26)
+            .Location = New System.Drawing.Point(520, yBtn),
+            .Size = New Size(80, 28)
         }
         AddHandler _btnAplicar.Click, AddressOf OnAplicar
 
@@ -223,32 +232,179 @@ Public Class OptionsDialog
     End Sub
 
     Private Sub ConstruirTabPlanos(tab As TabPage)
-        tab.Controls.Add(CrearEncabezadoSeccion("Listas de Materiales y Extracción", 15, 12))
+        ' SECCIÓN 1: Inserción Automática de Lista de Piezas
+        tab.Controls.Add(CrearEncabezadoSeccion("Inserción Automática de Lista de Piezas (Parts List)", 15, 10))
 
-        Dim lblTmpl As New Label With {.Text = "Plantilla Excel LDM:", .Location = New System.Drawing.Point(20, 38), .AutoSize = True}
-        _txtPlantillaExcel = New TextBox With {.Location = New System.Drawing.Point(160, 35), .Size = New Size(360, 23)}
+        _chkAutoListaPiezas = New CheckBox With {
+            .Text = "Insertar lista de piezas automáticamente al colocar la primera vista en una hoja",
+            .Location = New System.Drawing.Point(20, 32),
+            .Size = New Size(540, 22),
+            .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
+            .ForeColor = System.Drawing.Color.FromArgb(15, 23, 42)
+        }
+
+        Dim lblEstiloPieza As New Label With {
+            .Text = "Lista de piezas para Piezas (.ipt):",
+            .Location = New System.Drawing.Point(20, 62),
+            .Size = New Size(220, 20),
+            .TextAlign = ContentAlignment.MiddleLeft
+        }
+        _cmbEstiloPieza = New ComboBox With {
+            .Location = New System.Drawing.Point(245, 59),
+            .Size = New Size(285, 23),
+            .DropDownStyle = ComboBoxStyle.DropDown
+        }
+
+        Dim lblEstiloEnsamblaje As New Label With {
+            .Text = "Lista de piezas para Ensamblajes (.iam):",
+            .Location = New System.Drawing.Point(20, 92),
+            .Size = New Size(220, 20),
+            .TextAlign = ContentAlignment.MiddleLeft
+        }
+        _cmbEstiloEnsamblaje = New ComboBox With {
+            .Location = New System.Drawing.Point(245, 89),
+            .Size = New Size(285, 23),
+            .DropDownStyle = ComboBoxStyle.DropDown
+        }
+
+        Dim lblUbicacion As New Label With {
+            .Text = "Ubicación en la hoja de dibujo:",
+            .Location = New System.Drawing.Point(20, 122),
+            .Size = New Size(220, 20),
+            .TextAlign = ContentAlignment.MiddleLeft
+        }
+        _cmbUbicacionListaPiezas = New ComboBox With {
+            .Location = New System.Drawing.Point(245, 119),
+            .Size = New Size(285, 23),
+            .DropDownStyle = ComboBoxStyle.DropDownList
+        }
+        _cmbUbicacionListaPiezas.Items.AddRange(New Object() {
+            "Esquina superior derecha (Border MaxPoint)",
+            "Sobre el rótulo / cajetín (TitleBlock)",
+            "Esquina superior izquierda",
+            "Esquina inferior izquierda"
+        })
+
+        Dim lblNivelBom As New Label With {
+            .Text = "Nivel BoM para Ensamblajes:",
+            .Location = New System.Drawing.Point(20, 152),
+            .Size = New Size(220, 20),
+            .TextAlign = ContentAlignment.MiddleLeft
+        }
+        _cmbNivelBom = New ComboBox With {
+            .Location = New System.Drawing.Point(245, 149),
+            .Size = New Size(285, 23),
+            .DropDownStyle = ComboBoxStyle.DropDownList
+        }
+        _cmbNivelBom.Items.AddRange(New Object() {
+            "Estructurado (Primer nivel)",
+            "Sólo piezas (Parts only)"
+        })
+
+        ' Poblar estilos estándar conocidos y estilos dinámicos del documento activo
+        CargarEstilosDisponibles()
+
+        ' Habilitar / deshabilitar controles según el CheckBox
+        AddHandler _chkAutoListaPiezas.CheckedChanged, Sub()
+                                                           Dim en As Boolean = _chkAutoListaPiezas.Checked
+                                                           lblEstiloPieza.Enabled = en
+                                                           _cmbEstiloPieza.Enabled = en
+                                                           lblEstiloEnsamblaje.Enabled = en
+                                                           _cmbEstiloEnsamblaje.Enabled = en
+                                                           lblUbicacion.Enabled = en
+                                                           _cmbUbicacionListaPiezas.Enabled = en
+                                                           lblNivelBom.Enabled = en
+                                                           _cmbNivelBom.Enabled = en
+                                                       End Sub
+
+        ' SECCIÓN 2: Listas de Materiales y Extracción
+        tab.Controls.Add(CrearEncabezadoSeccion("Listas de Materiales y Extracción a Excel", 15, 185))
+
+        Dim lblTmpl As New Label With {.Text = "Plantilla Excel LDM:", .Location = New System.Drawing.Point(20, 212), .AutoSize = True}
+        _txtPlantillaExcel = New TextBox With {.Location = New System.Drawing.Point(160, 209), .Size = New Size(370, 23)}
 
         _chkOrdenarHojas = New CheckBox With {
             .Text = "Ordenar hojas de dibujo alfabética y numéricamente en documentos .idw",
-            .Location = New System.Drawing.Point(20, 68),
+            .Location = New System.Drawing.Point(20, 240),
             .Size = New Size(510, 25)
         }
 
-        tab.Controls.Add(CrearEncabezadoSeccion("Impresión a PDF", 15, 110))
+        ' SECCIÓN 3: Impresión a PDF
+        tab.Controls.Add(CrearEncabezadoSeccion("Impresión a PDF", 15, 275))
 
-        Dim lblPdf As New Label With {.Text = "Formato PDF predeterminado:", .Location = New System.Drawing.Point(20, 135), .AutoSize = True}
+        Dim lblPdf As New Label With {.Text = "Formato PDF predeterminado:", .Location = New System.Drawing.Point(20, 302), .AutoSize = True}
         _cmbFormatoPdf = New ComboBox With {
-            .Location = New System.Drawing.Point(200, 132),
+            .Location = New System.Drawing.Point(200, 299),
             .Size = New Size(180, 23),
             .DropDownStyle = ComboBoxStyle.DropDownList
         }
         _cmbFormatoPdf.Items.AddRange(New Object() {"B3", "B3_EXT", "LEGAL"})
 
-        tab.Controls.Add(lblTmpl)
-        tab.Controls.Add(_txtPlantillaExcel)
-        tab.Controls.Add(_chkOrdenarHojas)
-        tab.Controls.Add(lblPdf)
-        tab.Controls.Add(_cmbFormatoPdf)
+        tab.Controls.AddRange(New Control() {
+            _chkAutoListaPiezas,
+            lblEstiloPieza, _cmbEstiloPieza,
+            lblEstiloEnsamblaje, _cmbEstiloEnsamblaje,
+            lblUbicacion, _cmbUbicacionListaPiezas,
+            lblNivelBom, _cmbNivelBom,
+            lblTmpl, _txtPlantillaExcel,
+            _chkOrdenarHojas,
+            lblPdf, _cmbFormatoPdf
+        })
+    End Sub
+
+    Private Sub CargarEstilosDisponibles()
+        ' Estilos estándar basados en plantillas de la empresa
+        Dim estilosSugeridosPieza As New List(Of String) From {
+            "Copia de PIEZAS",
+            "PIEZAS",
+            "LDM",
+            "Lista de piezas (ISO)"
+        }
+
+        Dim estilosSugeridosEnsamblaje As New List(Of String) From {
+            "Copia de ENSAMBLAJE",
+            "Copia de Copia de ENSAMBLAJE",
+            "LDMARM",
+            "LDM",
+            "BULONERIA",
+            "INSUMOS",
+            "Lista de materiales (ISO)",
+            "Lista de piezas (ISO)"
+        }
+
+        ' Si hay un documento de dibujo activo o abierto en Inventor, leer los estilos reales de StylesManager
+        Try
+            Dim drawDoc As DrawingDocument = Nothing
+            If _invApp IsNot Nothing Then
+                If _invApp.ActiveDocument IsNot Nothing AndAlso
+                   _invApp.ActiveDocument.DocumentType = DocumentTypeEnum.kDrawingDocumentObject Then
+                    drawDoc = DirectCast(_invApp.ActiveDocument, DrawingDocument)
+                End If
+            End If
+
+            If drawDoc IsNot Nothing AndAlso drawDoc.StylesManager IsNot Nothing Then
+                For Each s As PartsListStyle In drawDoc.StylesManager.PartsListStyles
+                    Dim sName As String = s.Name.Trim()
+                    If Not estilosSugeridosPieza.Contains(sName, StringComparer.OrdinalIgnoreCase) Then
+                        estilosSugeridosPieza.Add(sName)
+                    End If
+                    If Not estilosSugeridosEnsamblaje.Contains(sName, StringComparer.OrdinalIgnoreCase) Then
+                        estilosSugeridosEnsamblaje.Add(sName)
+                    End If
+                Next
+            End If
+        Catch
+        End Try
+
+        _cmbEstiloPieza.Items.Clear()
+        For Each item In estilosSugeridosPieza
+            _cmbEstiloPieza.Items.Add(item)
+        Next
+
+        _cmbEstiloEnsamblaje.Items.Clear()
+        For Each item In estilosSugeridosEnsamblaje
+            _cmbEstiloEnsamblaje.Items.Add(item)
+        Next
     End Sub
 
     Private Sub ConstruirTabPieza(tab As TabPage)
@@ -387,6 +543,29 @@ Public Class OptionsDialog
         _chkDetectarSim.Checked = s.DetectarSimetriasAuto
         _chkActualizarCant.Checked = s.ActualizarCantidadUsada
 
+        ' Planos / Lista de piezas
+        _chkAutoListaPiezas.Checked = s.AutoInsertarListaPiezas
+        _cmbEstiloPieza.Text = If(Not String.IsNullOrEmpty(s.EstiloListaPiezasPieza), s.EstiloListaPiezasPieza, "Copia de PIEZAS")
+        _cmbEstiloEnsamblaje.Text = If(Not String.IsNullOrEmpty(s.EstiloListaPiezasEnsamblaje), s.EstiloListaPiezasEnsamblaje, "Copia de ENSAMBLAJE")
+
+        Select Case s.UbicacionListaPiezas
+            Case "SobreRotulo"
+                _cmbUbicacionListaPiezas.SelectedIndex = 1
+            Case "SuperiorIzquierda"
+                _cmbUbicacionListaPiezas.SelectedIndex = 2
+            Case "InferiorIzquierda"
+                _cmbUbicacionListaPiezas.SelectedIndex = 3
+            Case Else
+                _cmbUbicacionListaPiezas.SelectedIndex = 0
+        End Select
+
+        Select Case s.NivelBomEnsamblaje
+            Case "SoloPiezas"
+                _cmbNivelBom.SelectedIndex = 1
+            Case Else
+                _cmbNivelBom.SelectedIndex = 0
+        End Select
+
         _cmbFormatoPdf.SelectedItem = s.FormatoPdfPredeterminado
         _chkOrdenarHojas.Checked = s.OrdenarHojasAuto
         _txtPlantillaExcel.Text = s.PlantillaLdmExcel
@@ -418,6 +597,29 @@ Public Class OptionsDialog
         s.OmitirContentCenterCOM = _chkOmitirCC.Checked
         s.DetectarSimetriasAuto = _chkDetectarSim.Checked
         s.ActualizarCantidadUsada = _chkActualizarCant.Checked
+
+        ' Planos / Lista de piezas
+        s.AutoInsertarListaPiezas = _chkAutoListaPiezas.Checked
+        s.EstiloListaPiezasPieza = _cmbEstiloPieza.Text.Trim()
+        s.EstiloListaPiezasEnsamblaje = _cmbEstiloEnsamblaje.Text.Trim()
+
+        Select Case _cmbUbicacionListaPiezas.SelectedIndex
+            Case 1
+                s.UbicacionListaPiezas = "SobreRotulo"
+            Case 2
+                s.UbicacionListaPiezas = "SuperiorIzquierda"
+            Case 3
+                s.UbicacionListaPiezas = "InferiorIzquierda"
+            Case Else
+                s.UbicacionListaPiezas = "SuperiorDerecha"
+        End Select
+
+        Select Case _cmbNivelBom.SelectedIndex
+            Case 1
+                s.NivelBomEnsamblaje = "SoloPiezas"
+            Case Else
+                s.NivelBomEnsamblaje = "Estructurado"
+        End Select
 
         If _cmbFormatoPdf.SelectedItem IsNot Nothing Then
             s.FormatoPdfPredeterminado = _cmbFormatoPdf.SelectedItem.ToString()

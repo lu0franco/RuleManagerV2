@@ -481,6 +481,31 @@ Public Class Rules
         End Try
     End Sub
 
+    Public Shared Sub EjecutarAutoInsertarListaPiezas(invApp As Inventor.Application)
+        Try
+            If invApp.ActiveDocument Is Nothing Then
+                MessageBox.Show("No hay ningún documento activo en Autodesk Inventor.",
+                                "Lista de Piezas", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
+
+            If invApp.ActiveDocument.DocumentType <> DocumentTypeEnum.kDrawingDocumentObject Then
+                MessageBox.Show("Esta herramienta solo funciona en documentos de plano o dibujo (.idw / .dwg).",
+                                "Lista de Piezas", MessageBoxButtons.OK, MessageBoxIcon.Exclamation)
+                Return
+            End If
+
+            Dim manager As New AutoPartsListManager(invApp)
+            Dim insertada As Boolean = manager.Ejecutar(forzar:=True)
+            If insertada Then
+                MessageBox.Show("Lista de piezas insertada correctamente según la configuración de Opciones.",
+                                "Lista de Piezas", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End If
+        Catch ex As Exception
+            MessageBox.Show("Error al insertar Lista de Piezas: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
     Public Shared Sub EjecutarAddCopias(
    invApp As Inventor.Application)
 

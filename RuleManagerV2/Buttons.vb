@@ -191,6 +191,14 @@ Public Class Buttons
             "icon_1_traer_cantidades_32x32.png"))
 
         _buttonsData.Add(New ButtonData(
+            "Auto Lista Piezas",
+            "BTN_AUTO_PARTSLIST",
+            "Inserta la Lista de Piezas correspondiente (Pieza o Ensamblaje) según lo configurado en Opciones.",
+            "Drawing",
+            AddressOf Rules.EjecutarAutoInsertarListaPiezas,
+            "icon_1_traer_cantidades_32x32.png"))
+
+        _buttonsData.Add(New ButtonData(
             "Añadir Copias",
             "BTN_ADD_COPIAS",
             "Utilice esta herramienta para añadir las hojas de copia de trabajo...",
