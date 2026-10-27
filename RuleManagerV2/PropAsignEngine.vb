@@ -446,24 +446,44 @@ Public Class PropAsignEngine
                 numLargo = 0
             End Try
         End If
+        ' Determinar si debe sumar +3mm por defecto o recordar la elección anterior de este componente
+        Dim debeSumar As Boolean = True
+            Dim propSumaGuardada As Inventor.Property = Nothing
+            If customProps IsNot Nothing Then
+                Try : propSumaGuardada = customProps.Item("SUMA_3MM") : Catch : End Try
+                If propSumaGuardada Is Nothing Then
+                    Try : propSumaGuardada = customProps.Item("SOBREMEDIDA_3MM") : Catch : End Try
+                End If
+            End If
 
-        Dim itemMec As New ElementoMecItem With {
-            .Occurrence = elemento,
-            .Document = elemento.Definition.Document,
-            .DocumentPath = docPath,
-            .FileName = IOPath.GetFileName(docPath),
-            .PartNumber = sPartNumber,
-            .StockNumber = sStockNumber,
-            .MaterialPlano = sMatPlano,
-            .LargoOriginalStr = totalLengthstr,
-            .LargoOriginalNum = numLargo,
-            .AnchoStr = totalWidthstr,
-            .Tipo = "MEC",
-            .Sumar3mm = True,
-            .PropLargo = propLARGO
-        }
+            If propSumaGuardada IsNot Nothing AndAlso propSumaGuardada.Value IsNot Nothing Then
+                Dim valStr As String = CStr(propSumaGuardada.Value).Trim().ToUpperInvariant()
+                If valStr = "NO" OrElse valStr = "FALSE" OrElse valStr = "0" OrElse valStr = "N" Then
+                    debeSumar = False
+                ElseIf valStr = "SI" OrElse valStr = "SÍ" OrElse valStr = "YES" OrElse valStr = "TRUE" OrElse valStr = "1" OrElse valStr = "✓" OrElse valStr = "✔" Then
+                    debeSumar = True
+                End If
+            Else
+                debeSumar = SobremedidaLargoDialog.ObtenerPreferenciaSuma(docPath, sPartNumber, True)
+            End If
 
-        listaMECItems.Add(itemMec)
+            Dim itemMec As New ElementoMecItem With {
+                .Occurrence = elemento,
+                .Document = elemento.Definition.Document,
+                .DocumentPath = docPath,
+                .FileName = IOPath.GetFileName(docPath),
+                .PartNumber = sPartNumber,
+                .StockNumber = sStockNumber,
+                .MaterialPlano = sMatPlano,
+                .LargoOriginalStr = totalLengthstr,
+                .LargoOriginalNum = numLargo,
+                .AnchoStr = totalWidthstr,
+                .Tipo = "MEC",
+                .Sumar3mm = debeSumar,
+                .PropLargo = propLARGO
+            }
+
+            listaMECItems.Add(itemMec)
     End Sub
 
     ''' <summary>

@@ -110,6 +110,62 @@ Public Class SobremedidaLargoDialog
         End Get
     End Property
 
+    ' =========================================================
+    ' HISTORIAL DE PREFERENCIAS (MEMORIA DE SESIÓN & DOCUMENTO)
+    ' Recuerda si una pieza debe tener SUMA (+3mm) activa o no
+    ' =========================================================
+    Private Shared ReadOnly _preferenciasSesion As New Dictionary(Of String, Boolean)(StringComparer.OrdinalIgnoreCase)
+
+    Public Shared Function ObtenerPreferenciaSuma(docPath As String, partNumber As String, valorPorDefecto As Boolean) As Boolean
+        If Not String.IsNullOrEmpty(docPath) AndAlso _preferenciasSesion.ContainsKey(docPath) Then
+            Return _preferenciasSesion(docPath)
+        End If
+        If Not String.IsNullOrEmpty(partNumber) AndAlso _preferenciasSesion.ContainsKey(partNumber) Then
+            Return _preferenciasSesion(partNumber)
+        End If
+        Return valorPorDefecto
+    End Function
+
+    Public Shared Sub GuardarPreferenciaSuma(docPath As String, partNumber As String, suma As Boolean)
+        If Not String.IsNullOrEmpty(docPath) Then
+            _preferenciasSesion(docPath) = suma
+        End If
+        If Not String.IsNullOrEmpty(partNumber) Then
+            _preferenciasSesion(partNumber) = suma
+        End If
+    End Sub
+
+    Public Shared Function ObtenerPreferenciaDeDocumento(item As ElementoMecItem) As Boolean?
+        If item Is Nothing Then Return Nothing
+        Dim doc As Document = item.Document
+        If doc Is Nothing AndAlso item.Occurrence IsNot Nothing Then
+            Try : doc = item.Occurrence.Definition.Document : Catch : End Try
+        End If
+        If doc Is Nothing Then Return Nothing
+
+        Try
+            Dim customProps As PropertySet = doc.PropertySets.Item("Inventor User Defined Properties")
+            If customProps IsNot Nothing Then
+                Dim prop As Inventor.Property = Nothing
+                Try : prop = customProps.Item("SUMA_3MM") : Catch : End Try
+                If prop Is Nothing Then
+                    Try : prop = customProps.Item("SOBREMEDIDA_3MM") : Catch : End Try
+                End If
+
+                If prop IsNot Nothing AndAlso prop.Value IsNot Nothing Then
+                    Dim valStr As String = CStr(prop.Value).Trim().ToUpperInvariant()
+                    If valStr = "NO" OrElse valStr = "FALSE" OrElse valStr = "0" OrElse valStr = "N" Then
+                        Return False
+                    ElseIf valStr = "SI" OrElse valStr = "SÍ" OrElse valStr = "YES" OrElse valStr = "TRUE" OrElse valStr = "1" OrElse valStr = "✓" OrElse valStr = "✔" Then
+                        Return True
+                    End If
+                End If
+            End If
+        Catch
+        End Try
+        Return Nothing
+    End Function
+
     Public Sub New(invApp As Inventor.Application, items As List(Of ElementoMecItem))
         _invApp = invApp
         _items = If(items, New List(Of ElementoMecItem)())
@@ -742,6 +798,14 @@ Public Class SobremedidaLargoDialog
                 End Try
             End If
 
+            ' Sincronizar preferencia recordada (si existe en iProperties de la pieza o en sesión)
+            Dim prefDoc As Boolean? = ObtenerPreferenciaDeDocumento(item)
+            If prefDoc.HasValue Then
+                item.Sumar3mm = prefDoc.Value
+            Else
+                item.Sumar3mm = ObtenerPreferenciaSuma(item.DocumentPath, item.PartNumber, item.Sumar3mm)
+            End If
+
             Dim rowIdx = _grid.Rows.Add(
                 item.Sumar3mm,
                 item.PartNumber,
@@ -1145,13 +1209,57 @@ Public Class SobremedidaLargoDialog
     End Sub
 
     ''' <summary>
-    ''' Aplica los valores de Largo final en la propiedad LARGO de cada componente.
+    ''' Aplica los valores de Largo final en la propiedad LARGO de cada componente
+    ''' y guarda la preferencia de SUMA (+3mm) tanto en memoria de sesión como en la
+    ''' propiedad personalizada "SUMA_3MM" del documento de la pieza, asegurando que
+    ''' la elección (marcada o desmarcada) se recuerde en ejecuciones posteriores.
     ''' </summary>
     Public Sub AplicarCambios()
         For Each item In _items
             Try
+                ' 1. Guardar en memoria de sesión para recordar en la sesión actual
+                GuardarPreferenciaSuma(item.DocumentPath, item.PartNumber, item.Sumar3mm)
+
+                ' 2. Actualizar propiedad LARGO con el largo calculado (con o sin +3mm)
                 If item.PropLargo IsNot Nothing Then
                     item.PropLargo.Value = item.LargoFinalStr
+                End If
+
+                ' 3. Persistir en la propiedad personalizada "SUMA_3MM" del documento de la pieza
+                Dim doc As Document = item.Document
+                If doc Is Nothing AndAlso item.Occurrence IsNot Nothing Then
+                    Try
+                        doc = item.Occurrence.Definition.Document
+                    Catch
+                    End Try
+                End If
+
+                If doc IsNot Nothing Then
+                    Dim customProps As PropertySet = Nothing
+                    Try
+                        customProps = doc.PropertySets.Item("Inventor User Defined Properties")
+                    Catch
+                        Try
+                            customProps = doc.PropertySets.Add("Inventor User Defined Properties")
+                        Catch
+                        End Try
+                    End Try
+
+                    If customProps IsNot Nothing Then
+                        Dim propSuma As Inventor.Property = Nothing
+                        Try
+                            propSuma = customProps.Item("SUMA_3MM")
+                        Catch
+                            Try
+                                propSuma = customProps.Add(If(item.Sumar3mm, "SI", "NO"), "SUMA_3MM")
+                            Catch
+                            End Try
+                        End Try
+
+                        If propSuma IsNot Nothing Then
+                            propSuma.Value = If(item.Sumar3mm, "SI", "NO")
+                        End If
+                    End If
                 End If
             Catch
             End Try
