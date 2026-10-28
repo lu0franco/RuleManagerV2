@@ -25,7 +25,8 @@ Public Class ElementoPadreItem
     Public Property DocumentPath As String = ""
     Public Property FileName As String = ""
     Public Property Extension As String = ""
-    Public Property ItemNumber As String = ""            ' Posición en BOM (1, 2, 3...)
+    Public Property ItemNumber As String = ""            ' Posición jerárquica en BOM (1, 2, 11.2...)
+    Public Property LocalItemNumber As String = ""       ' Posición local en BOM del subensamblaje padre (1, 2, 3...)
     Public Property Quantity As Integer = 1             ' CTDAD en BOM
     Public Property BomStructure As String = "Normal"   ' Normal, Comprado, Inseparable, Fantasma
     Public Property IsAssembly As Boolean = False
@@ -43,6 +44,12 @@ Public Class ElementoPadreItem
     Public Property ManualOverride As Boolean = False
     Public Property Level As Integer = 0
     Public Property Included As Boolean = True
+    Public Property IsShared As Boolean = False           ' Marca si la pieza se utiliza en múltiples ensamblajes
+    Public Property IsReusedInstance As Boolean = False   ' Si es una instancia reutilizada (no primaria) de una pieza compartida
+    Public Property SharedPrimaryPadre As String = ""     ' Padre originario donde se fabricó (menor orden alfanumérico)
+    Public Property HasPreviousAssignment As Boolean = False ' Indica si ya tenía una asignación de padre o código previa
+    Public Property HasPrecedingGap As Boolean = False       ' Indica si hay un salto numérico antes de este elemento en el BOM
+    Public Property PrecedingGapNumber As Integer = 0        ' Número de elemento faltante previo
 
     Public ReadOnly Property DisplayName As String
         Get
@@ -125,6 +132,21 @@ Public Class ElementoPadreItem
 End Class
 
 ''' <summary>
+''' Información de un hueco o salto en la secuencia de Elementos de la lista de materiales (BOM).
+''' Permite auditar y reasignar el número faltante a un componente existente.
+''' </summary>
+Public Class HuecoElementoInfo
+    Public Property ParentCode As String = ""
+    Public Property ParentName As String = ""
+    Public Property MissingNumber As Integer = 0
+    Public Property ExistingItems As New List(Of ElementoPadreItem)()
+
+    Public Overrides Function ToString() As String
+        Return String.Format("{0} [{1}] - Falta Elemento {2}", ParentName, ParentCode, MissingNumber)
+    End Function
+End Class
+
+''' <summary>
 ''' Diálogo profesional e intuitivo para numerar piezas en función del ensamble padre (ASIGNAR PADRES).
 ''' Diseñado con el mismo formato y filosofía visual de 'Asignar Propiedades' (SobremedidaLargoDialog):
 ''' - Agrupamiento jerárquico de piezas bajo su ensamble/subensamblaje en un árbol con ramas y carpetas (TreeView)
@@ -160,6 +182,11 @@ Public Class AsignarPadresDialog
     Private splitCenter As SplitContainer
     Private treeEstructura As TreeView
     Private _grid As DataGridView
+    Private pnlGridToolbar As Panel
+    Private btnSobreescribirAnteriores As Button
+    Private btnAuditarHuecos As Button
+    Private _sortColumn As Integer = -1
+    Private _sortAscending As Boolean = True
 
     ' Controles de configuración y filtrado en panel superior
     Private txtBuscar As WinTextBox
@@ -905,6 +932,7 @@ Public Class AsignarPadresDialog
             .GridColor = Color.FromArgb(226, 232, 240),
             .ForeColor = Color.FromArgb(15, 23, 42),
             .EnableHeadersVisualStyles = False,
+            .ColumnHeadersVisible = True,
             .RowHeadersVisible = False,
             .SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             .MultiSelect = False,
@@ -934,8 +962,64 @@ Public Class AsignarPadresDialog
         AddHandler _grid.CellDoubleClick, AddressOf Grid_CellDoubleClick
         AddHandler _grid.CellValueChanged, AddressOf Grid_CellValueChanged
         AddHandler _grid.CurrentCellDirtyStateChanged, AddressOf Grid_CurrentCellDirtyStateChanged
+        AddHandler _grid.ColumnHeaderMouseClick, AddressOf Grid_ColumnHeaderMouseClick
 
+        pnlGridToolbar = New Panel() With {
+            .Dock = DockStyle.Top,
+            .Height = 36,
+            .BackColor = Color.FromArgb(248, 250, 252),
+            .Padding = New Padding(8, 4, 8, 4)
+        }
+
+        Dim lblGridHeader As New Label() With {
+            .Text = "Componentes a procesar (Columna 'Inc.' define la selección para esta corrida):",
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .ForeColor = Color.FromArgb(51, 65, 85),
+            .Location = New Point(8, 9),
+            .AutoSize = True
+        }
+        pnlGridToolbar.Controls.Add(lblGridHeader)
+
+        btnSobreescribirAnteriores = New Button() With {
+            .Text = "Sobreescribir datos anteriores",
+            .Size = New Size(205, 26),
+            .Location = New Point(pnlGridToolbar.Width - 215, 5),
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
+            .BackColor = Color.White,
+            .ForeColor = Color.FromArgb(67, 56, 202),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnSobreescribirAnteriores.FlatAppearance.BorderColor = Color.FromArgb(199, 210, 254)
+        Dim tipSobreescribir As New ToolTip()
+        tipSobreescribir.SetToolTip(btnSobreescribirAnteriores, "Marca todos los componentes para procesar ('Inc.' = SÍ), elimina bloqueos de asignaciones previas o ediciones manuales y renumera todo el ensamble desde cero.")
+        AddHandler btnSobreescribirAnteriores.Click, AddressOf BtnSobreescribirAnteriores_Click
+        pnlGridToolbar.Controls.Add(btnSobreescribirAnteriores)
+
+        btnAuditarHuecos = New Button() With {
+            .Text = "⚠️ Huecos en BOM",
+            .Size = New Size(175, 26),
+            .Location = New Point(pnlGridToolbar.Width - 398, 5),
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
+            .BackColor = Color.FromArgb(254, 243, 199),
+            .ForeColor = Color.FromArgb(180, 83, 9),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnAuditarHuecos.FlatAppearance.BorderColor = Color.FromArgb(252, 211, 77)
+        Dim tipHuecos As New ToolTip()
+        tipHuecos.SetToolTip(btnAuditarHuecos, "Detecta saltos en la columna de Elemento (BOM Estructurado) y permite asignar el número faltante a un componente existente.")
+        AddHandler btnAuditarHuecos.Click, AddressOf BtnAuditarHuecos_Click
+        pnlGridToolbar.Controls.Add(btnAuditarHuecos)
+
+        ' IMPORTANTE WinForms: Para que pnlGridToolbar (Dock.Top) quede arriba y _grid (Dock.Fill) ocupe
+        ' el resto sin tapar los encabezados de columna, _grid debe procesarse después (BringToFront).
+        splitCenter.Panel2.Controls.Clear()
         splitCenter.Panel2.Controls.Add(_grid)
+        splitCenter.Panel2.Controls.Add(pnlGridToolbar)
+        _grid.BringToFront()
 
         ' =====================================================================
         ' 5. ENSAMBLAJE DE CONTROLES: Orden de capas en Me.Controls
@@ -964,7 +1048,7 @@ Public Class AsignarPadresDialog
             .Name = "ColInc",
             .HeaderText = "Inc.",
             .Width = 38,
-            .SortMode = DataGridViewColumnSortMode.NotSortable
+            .SortMode = DataGridViewColumnSortMode.Programmatic
         }
         _grid.Columns.Add(colInc)
 
@@ -974,7 +1058,8 @@ Public Class AsignarPadresDialog
             .Name = "ColItem",
             .HeaderText = "Elemento",
             .Width = 65,
-            .ReadOnly = True,
+            .ReadOnly = False,
+            .SortMode = DataGridViewColumnSortMode.Programmatic,
             .DefaultCellStyle = New DataGridViewCellStyle() With {.Alignment = DataGridViewContentAlignment.MiddleCenter}
         }
         _grid.Columns.Add(colItem)
@@ -985,6 +1070,7 @@ Public Class AsignarPadresDialog
             .HeaderText = "Niv.",
             .Width = 42,
             .ReadOnly = True,
+            .SortMode = DataGridViewColumnSortMode.Programmatic,
             .DefaultCellStyle = New DataGridViewCellStyle() With {.Alignment = DataGridViewContentAlignment.MiddleCenter}
         }
         _grid.Columns.Add(colNivel)
@@ -995,6 +1081,7 @@ Public Class AsignarPadresDialog
             .HeaderText = "Componente / Rama Jerárquica",
             .Width = 240,
             .ReadOnly = True,
+            .SortMode = DataGridViewColumnSortMode.Programmatic,
             .DefaultCellStyle = New DataGridViewCellStyle() With {.Font = New Font("Segoe UI", 8.5F, FontStyle.Bold)}
         }
         _grid.Columns.Add(colArchivo)
@@ -1005,6 +1092,7 @@ Public Class AsignarPadresDialog
             .HeaderText = "Tipo",
             .Width = 65,
             .ReadOnly = True,
+            .SortMode = DataGridViewColumnSortMode.Programmatic,
             .DefaultCellStyle = New DataGridViewCellStyle() With {
                 .Alignment = DataGridViewContentAlignment.MiddleCenter,
                 .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold)
@@ -1018,6 +1106,7 @@ Public Class AsignarPadresDialog
             .HeaderText = "Cant.",
             .Width = 50,
             .ReadOnly = True,
+            .SortMode = DataGridViewColumnSortMode.Programmatic,
             .DefaultCellStyle = New DataGridViewCellStyle() With {.Alignment = DataGridViewContentAlignment.MiddleCenter}
         }
         _grid.Columns.Add(colCant)
@@ -1027,7 +1116,8 @@ Public Class AsignarPadresDialog
             .Name = "ColPadre",
             .HeaderText = "Ensamble Padre",
             .Width = 140,
-            .ReadOnly = True
+            .ReadOnly = True,
+            .SortMode = DataGridViewColumnSortMode.Programmatic
         }
         _grid.Columns.Add(colPadre)
 
@@ -1037,6 +1127,7 @@ Public Class AsignarPadresDialog
             .HeaderText = "POS",
             .Width = 55,
             .ReadOnly = False,
+            .SortMode = DataGridViewColumnSortMode.Programmatic,
             .DefaultCellStyle = New DataGridViewCellStyle() With {
                 .Alignment = DataGridViewContentAlignment.MiddleCenter,
                 .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
@@ -1050,7 +1141,8 @@ Public Class AsignarPadresDialog
             .Name = "ColStockActual",
             .HeaderText = "Nº Almacenamiento Actual",
             .Width = 150,
-            .ReadOnly = True
+            .ReadOnly = True,
+            .SortMode = DataGridViewColumnSortMode.Programmatic
         }
         _grid.Columns.Add(colStock)
 
@@ -1060,7 +1152,7 @@ Public Class AsignarPadresDialog
             .HeaderText = "Soldado",
             .Width = 65,
             .ReadOnly = False,
-            .SortMode = DataGridViewColumnSortMode.NotSortable
+            .SortMode = DataGridViewColumnSortMode.Programmatic
         }
         _grid.Columns.Add(colSoldado)
 
@@ -1070,6 +1162,7 @@ Public Class AsignarPadresDialog
             .HeaderText = "Nuevo Código Propuesto",
             .Width = 175,
             .ReadOnly = False,
+            .SortMode = DataGridViewColumnSortMode.Programmatic,
             .DefaultCellStyle = New DataGridViewCellStyle() With {
                 .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
                 .ForeColor = Color.FromArgb(16, 185, 129)
@@ -1082,10 +1175,59 @@ Public Class AsignarPadresDialog
             .Name = "ColPartNumber",
             .HeaderText = "Part Number Actual",
             .Width = 140,
-            .ReadOnly = True
+            .ReadOnly = True,
+            .SortMode = DataGridViewColumnSortMode.Programmatic
         }
         _grid.Columns.Add(colPartNumber)
     End Sub
+
+    ''' <summary>
+    ''' Obtiene la vista estructurada ('Estructurado' / 'Structured') de la Lista de Materiales (BOM)
+    ''' de un ensamble o subensamblaje, asegurando que se extraigan los números de Elemento y orden nativos
+    ''' tal como se configuran en el archivo .iam correspondiente.
+    ''' </summary>
+    Private Function ObtenerBOMViewEstructurado(compDef As AssemblyComponentDefinition) As BOMView
+        If compDef Is Nothing Then Return Nothing
+        Try
+            Dim oBOM As BOM = Nothing
+            Try : oBOM = compDef.BOM : Catch : End Try
+            If oBOM Is Nothing Then
+                Try : oBOM = CType(compDef.Document, Object).ComponentDefinition.BOM : Catch : End Try
+            End If
+            If oBOM Is Nothing Then Return Nothing
+
+            Try : oBOM.StructuredViewEnabled = True : Catch : End Try
+            Try : oBOM.StructuredViewFirstLevelOnly = False : Catch : End Try
+
+            If oBOM.BOMViews IsNot Nothing Then
+                For Each bv As BOMView In oBOM.BOMViews
+                    Try
+                        If bv.ViewType = BOMViewTypeEnum.kStructuredBOMViewType OrElse
+                           bv.Name.IndexOf("Structured", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+                           bv.Name.IndexOf("Estructurad", StringComparison.OrdinalIgnoreCase) >= 0 Then
+                            Return bv
+                        End If
+                    Catch
+                    End Try
+                Next
+
+                For Each bv As BOMView In oBOM.BOMViews
+                    Try
+                        If bv.ViewType <> BOMViewTypeEnum.kModelDataBOMViewType Then
+                            Return bv
+                        End If
+                    Catch
+                    End Try
+                Next
+
+                If oBOM.BOMViews.Count > 0 Then
+                    Return oBOM.BOMViews.Item(1)
+                End If
+            End If
+        Catch
+        End Try
+        Return Nothing
+    End Function
 
     ''' <summary>
     ''' Carga los componentes priorizando la Lista de Materiales (BOM) estructurada de Inventor
@@ -1102,62 +1244,12 @@ Public Class AsignarPadresDialog
         ' 1. Intentar recorrer BOM estructurado de Inventor directamente desde ComponentDefinition
         Try
             Dim compDef As AssemblyComponentDefinition = TryCast(_asmDoc.ComponentDefinition, AssemblyComponentDefinition)
-            Dim oBOM As BOM = Nothing
-            If compDef IsNot Nothing Then
-                Try : oBOM = compDef.BOM : Catch : End Try
-            End If
-            If oBOM Is Nothing Then
-                Try : oBOM = CType(_asmDoc, Object).ComponentDefinition.BOM : Catch : End Try
-            End If
+            Dim structView As BOMView = ObtenerBOMViewEstructurado(compDef)
 
-            If oBOM IsNot Nothing Then
-                Try
-                    oBOM.StructuredViewEnabled = True
-                Catch
-                End Try
-                Try
-                    oBOM.StructuredViewFirstLevelOnly = False
-                Catch
-                End Try
-
-                Dim structView As BOMView = Nothing
-                If oBOM.BOMViews IsNot Nothing Then
-                    For Each bv As BOMView In oBOM.BOMViews
-                        Try
-                            If bv.ViewType = BOMViewTypeEnum.kStructuredBOMViewType OrElse
-                               bv.Name.IndexOf("Structured", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
-                               bv.Name.IndexOf("Estructurad", StringComparison.OrdinalIgnoreCase) >= 0 Then
-                                structView = bv
-                                Exit For
-                            End If
-                        Catch
-                        End Try
-                    Next
-
-                    ' Fallback si no coincide por tipo kStructuredBOMViewType: buscar cualquier vista no ModelData
-                    If structView Is Nothing Then
-                        For Each bv As BOMView In oBOM.BOMViews
-                            Try
-                                If bv.ViewType <> BOMViewTypeEnum.kModelDataBOMViewType Then
-                                    structView = bv
-                                    Exit For
-                                End If
-                            Catch
-                            End Try
-                        Next
-                    End If
-
-                    ' Último recurso: primera vista disponible
-                    If structView Is Nothing AndAlso oBOM.BOMViews.Count > 0 Then
-                        structView = oBOM.BOMViews.Item(1)
-                    End If
-                End If
-
-                If structView IsNot Nothing AndAlso structView.BOMRows IsNot Nothing AndAlso structView.BOMRows.Count > 0 Then
-                    RecorrerBOMRows(structView.BOMRows, rootCode, 1)
-                    If _items.Count > 0 Then
-                        cargoDesdeBOM = True
-                    End If
+            If structView IsNot Nothing AndAlso structView.BOMRows IsNot Nothing AndAlso structView.BOMRows.Count > 0 Then
+                RecorrerBOMRows(structView.BOMRows, rootCode, 1, Nothing)
+                If _items.Count > 0 Then
+                    cargoDesdeBOM = True
                 End If
             End If
         Catch
@@ -1330,13 +1422,37 @@ Public Class AsignarPadresDialog
             Dim heredaSoldado As Boolean = (parentItem IsNot Nothing AndAlso parentItem.IsSoldado)
             Dim esSoldadoInicial As Boolean = (docSoldado OrElse heredaSoldado)
 
+            ' Detección de asignación previa de PADRE o código estructurado
+            Dim currentPadreVal As String = ObtenerCustomProp(targetDoc, "PADRE")
+            Dim tieneAsignacionPrevia As Boolean = False
+            If Not String.IsNullOrEmpty(currentPadreVal) AndAlso currentPadreVal.Trim() <> "" Then
+                tieneAsignacionPrevia = True
+            ElseIf EsPropiedadMarcada(targetDoc, "PADRE_ASIGNADO") Then
+                tieneAsignacionPrevia = True
+            ElseIf Not String.IsNullOrEmpty(stockNum) AndAlso stockNum.Contains(".") AndAlso Not isCom AndAlso Not isCC Then
+                tieneAsignacionPrevia = True
+            End If
+
+            Dim rawItemNum As String = ""
+            Try : rawItemNum = row.ItemNumber : Catch : End Try
+            Dim localNumSegment As String = ObtenerUltimoSegmentoItemNumber(rawItemNum)
+            If String.IsNullOrEmpty(localNumSegment) Then localNumSegment = rawItemNum
+
+            Dim hierarchicalItemNum As String = ""
+            If parentItem IsNot Nothing AndAlso Not String.IsNullOrEmpty(parentItem.ItemNumber) Then
+                hierarchicalItemNum = parentItem.ItemNumber & "." & localNumSegment
+            Else
+                hierarchicalItemNum = rawItemNum
+            End If
+
             Dim item As New ElementoPadreItem() With {
                 .Document = targetDoc,
                 .ModelStateName = msName,
                 .DocumentPath = doc.FullFileName,
                 .FileName = IOPath.GetFileName(doc.FullFileName),
                 .Extension = If(isAsm, ".iam", ".ipt"),
-                .ItemNumber = row.ItemNumber,
+                .LocalItemNumber = localNumSegment,
+                .ItemNumber = hierarchicalItemNum,
                 .Quantity = row.ItemQuantity,
                 .BomStructure = structStr,
                 .IsAssembly = isAsm,
@@ -1345,14 +1461,15 @@ Public Class AsignarPadresDialog
                 .IsSoldado = esSoldadoInicial,
                 .ParentItem = parentItem,
                 .Categoria = categoriaFab,
-                .CurrentPadre = ObtenerCustomProp(targetDoc, "PADRE"),
+                .CurrentPadre = currentPadreVal,
                 .SuggestedPadre = padreCode,
                 .CurrentPartNumber = partNum,
                 .CurrentStockNumber = stockNum,
                 .Level = nivel,
-                .Included = (Not isCom AndAlso Not isCC),
-                .ProposedPosition = If(isCom OrElse isCC, "-", ""),
-                .ProposedCode = If(isCom, If(Not String.IsNullOrEmpty(stockNum), stockNum, If(Not String.IsNullOrEmpty(partNum), partNum, IOPath.GetFileNameWithoutExtension(doc.FullFileName))), "")
+                .HasPreviousAssignment = tieneAsignacionPrevia,
+                .Included = (Not isCom AndAlso Not isCC AndAlso Not tieneAsignacionPrevia),
+                .ProposedPosition = If(isCom OrElse isCC, "-", If(tieneAsignacionPrevia, ObtenerCustomProp(targetDoc, "POS"), "")),
+                .ProposedCode = If(isCom, If(Not String.IsNullOrEmpty(stockNum), stockNum, If(Not String.IsNullOrEmpty(partNum), partNum, IOPath.GetFileNameWithoutExtension(doc.FullFileName))), If(tieneAsignacionPrevia, stockNum, ""))
             }
 
             ' Encontrar ocurrencia real en el ensamblaje para resaltado 3D y zoom respetando el Estado de Modelo
@@ -1364,16 +1481,32 @@ Public Class AsignarPadresDialog
             _items.Add(item)
 
             ' Si es subensamblaje de fabricación (NO comercial) y tiene filas hijas, descender en jerarquía recursivamente
-            ' Los componentes comerciales se adquieren terminados y nunca reciben renumeración interna de padres
+            ' Priorizando la vista estructurada del BOM propio de dicho subensamblaje para respetar su orden y Elemento nativo
             If isAsm AndAlso Not isCom Then
                 Dim subPadre As String = If(Not String.IsNullOrEmpty(item.CurrentStockNumber), item.CurrentStockNumber,
                                          If(Not String.IsNullOrEmpty(item.CurrentPartNumber), item.CurrentPartNumber, item.FileName))
+                Dim subBOMRecorrido As Boolean = False
                 Try
-                    If row.ChildRows IsNot Nothing AndAlso row.ChildRows.Count > 0 Then
-                        RecorrerBOMRows(row.ChildRows, subPadre, nivel + 1, item)
+                    Dim subCompDef As AssemblyComponentDefinition = TryCast(doc.ComponentDefinition, AssemblyComponentDefinition)
+                    If subCompDef IsNot Nothing Then
+                        Dim subView = ObtenerBOMViewEstructurado(subCompDef)
+                        If subView IsNot Nothing AndAlso subView.BOMRows IsNot Nothing AndAlso subView.BOMRows.Count > 0 Then
+                            RecorrerBOMRows(subView.BOMRows, subPadre, nivel + 1, item)
+                            subBOMRecorrido = True
+                        End If
                     End If
                 Catch
+                    subBOMRecorrido = False
                 End Try
+
+                If Not subBOMRecorrido Then
+                    Try
+                        If row.ChildRows IsNot Nothing AndAlso row.ChildRows.Count > 0 Then
+                            RecorrerBOMRows(row.ChildRows, subPadre, nivel + 1, item)
+                        End If
+                    Catch
+                    End Try
+                End If
             End If
         Next
     End Sub
@@ -1489,6 +1622,17 @@ Public Class AsignarPadresDialog
                 bomItemNumber = (_items.Count + 1).ToString()
             End If
 
+            ' Detección de asignación previa de PADRE o código estructurado
+            Dim currentPadreVal As String = ObtenerCustomProp(targetDoc, "PADRE")
+            Dim tieneAsignacionPrevia As Boolean = False
+            If Not String.IsNullOrEmpty(currentPadreVal) AndAlso currentPadreVal.Trim() <> "" Then
+                tieneAsignacionPrevia = True
+            ElseIf EsPropiedadMarcada(targetDoc, "PADRE_ASIGNADO") Then
+                tieneAsignacionPrevia = True
+            ElseIf Not String.IsNullOrEmpty(stockNum) AndAlso stockNum.Contains(".") AndAlso Not isCom AndAlso Not isCC Then
+                tieneAsignacionPrevia = True
+            End If
+
             Dim item As New ElementoPadreItem() With {
                 .Occurrence = occ,
                 .Document = targetDoc,
@@ -1505,14 +1649,15 @@ Public Class AsignarPadresDialog
                 .IsSoldado = esSoldadoInicial,
                 .ParentItem = parentItem,
                 .Categoria = categoriaFab,
-                .CurrentPadre = ObtenerCustomProp(targetDoc, "PADRE"),
+                .CurrentPadre = currentPadreVal,
                 .SuggestedPadre = padreCode,
                 .CurrentPartNumber = partNum,
                 .CurrentStockNumber = stockNum,
                 .Level = nivel,
-                .Included = (Not isCom AndAlso Not isCC),
-                .ProposedPosition = If(isCom OrElse isCC, "-", ""),
-                .ProposedCode = If(isCom, If(Not String.IsNullOrEmpty(stockNum), stockNum, If(Not String.IsNullOrEmpty(partNum), partNum, IOPath.GetFileNameWithoutExtension(docPath))), "")
+                .HasPreviousAssignment = tieneAsignacionPrevia,
+                .Included = (Not isCom AndAlso Not isCC AndAlso Not tieneAsignacionPrevia),
+                .ProposedPosition = If(isCom OrElse isCC, "-", If(tieneAsignacionPrevia, ObtenerCustomProp(targetDoc, "POS"), "")),
+                .ProposedCode = If(isCom, If(Not String.IsNullOrEmpty(stockNum), stockNum, If(Not String.IsNullOrEmpty(partNum), partNum, IOPath.GetFileNameWithoutExtension(docPath))), If(tieneAsignacionPrevia, stockNum, ""))
             }
 
             _items.Add(item)
@@ -2009,12 +2154,134 @@ Public Class AsignarPadresDialog
     End Function
 
     ''' <summary>
+    ''' Extrae el último segmento numérico o identificador de un número de Elemento de BOM
+    ''' (ej: "11.2" -> "2", "11.13.1" -> "1", "2" -> "2").
+    ''' </summary>
+    Public Function ObtenerUltimoSegmentoItemNumber(itemNum As String) As String
+        If String.IsNullOrEmpty(itemNum) Then Return ""
+        Dim parts = itemNum.Split({"."c, "/"c, "-"c}, StringSplitOptions.RemoveEmptyEntries)
+        If parts.Length > 0 Then
+            Return parts(parts.Length - 1).Trim()
+        End If
+        Return itemNum.Trim()
+    End Function
+
+    ''' <summary>
+    ''' Detecta cualquier hueco o salto en la sucesión numérica de Elementos en cada subensamblaje
+    ''' (por ejemplo: 1, 2, 3, 5 -> falta el elemento 4).
+    ''' </summary>
+    Public Function DetectarHuecosElementosBOM() As List(Of HuecoElementoInfo)
+        Dim listaHuecos As New List(Of HuecoElementoInfo)()
+        Try
+            Dim gruposPorPadre As New Dictionary(Of String, List(Of ElementoPadreItem))(StringComparer.OrdinalIgnoreCase)
+
+            For Each item In _items
+                ' Resetear marcas de hueco
+                item.HasPrecedingGap = False
+                item.PrecedingGapNumber = 0
+
+                ' Solo componentes de fabricación (no comerciales ni CC) dentro de un subensamblaje
+                If Not item.IsCommercial AndAlso Not item.IsContentCenter Then
+                    Dim keyPadre As String = If(Not String.IsNullOrEmpty(item.SuggestedPadre), item.SuggestedPadre, "ROOT")
+                    If Not gruposPorPadre.ContainsKey(keyPadre) Then
+                        gruposPorPadre(keyPadre) = New List(Of ElementoPadreItem)()
+                    End If
+                    gruposPorPadre(keyPadre).Add(item)
+                End If
+            Next
+
+            For Each kvp In gruposPorPadre
+                Dim subItems = kvp.Value
+                Dim numerosExistentes As New HashSet(Of Integer)()
+                Dim maxNum As Integer = 0
+
+                For Each it In subItems
+                    Dim cleanLocal As String = ObtenerUltimoSegmentoItemNumber(If(Not String.IsNullOrEmpty(it.LocalItemNumber), it.LocalItemNumber, it.ItemNumber))
+                    Dim numVal As Integer
+                    If Integer.TryParse(cleanLocal, numVal) AndAlso numVal > 0 Then
+                        numerosExistentes.Add(numVal)
+                        If numVal > maxNum Then maxNum = numVal
+                    End If
+                Next
+
+                If maxNum > 1 Then
+                    Dim parentName As String = kvp.Key
+                    Dim pItem = _items.Find(Function(x) String.Equals(x.ProposedCode, kvp.Key, StringComparison.OrdinalIgnoreCase) OrElse String.Equals(x.CurrentStockNumber, kvp.Key, StringComparison.OrdinalIgnoreCase))
+                    If pItem IsNot Nothing AndAlso Not String.IsNullOrEmpty(pItem.DisplayName) Then
+                        parentName = pItem.DisplayName
+                    End If
+
+                    For n As Integer = 1 To maxNum - 1
+                        If Not numerosExistentes.Contains(n) Then
+                            Dim hueco As New HuecoElementoInfo() With {
+                                .ParentCode = kvp.Key,
+                                .ParentName = parentName,
+                                .MissingNumber = n,
+                                .ExistingItems = New List(Of ElementoPadreItem)(subItems)
+                            }
+                            listaHuecos.Add(hueco)
+
+                            ' Marcar componentes en este subensamblaje que vengan después del hueco
+                            For Each it In subItems
+                                Dim clean = ObtenerUltimoSegmentoItemNumber(If(Not String.IsNullOrEmpty(it.LocalItemNumber), it.LocalItemNumber, it.ItemNumber))
+                                Dim nVal As Integer
+                                If Integer.TryParse(clean, nVal) AndAlso nVal = n + 1 Then
+                                    it.HasPrecedingGap = True
+                                    it.PrecedingGapNumber = n
+                                End If
+                            Next
+                        End If
+                    Next
+                End If
+            Next
+        Catch
+        End Try
+
+        Return listaHuecos
+    End Function
+
+    ''' <summary>
+    ''' Compara dos códigos o nombres usando orden alfanumérico natural (ej: "D-646.B.01.00" < "D-646.B.05.00").
+    ''' </summary>
+    Private Function CompararCodigosAlfanumericos(a As String, b As String) As Integer
+        If String.Equals(a, b, StringComparison.OrdinalIgnoreCase) Then Return 0
+        If String.IsNullOrEmpty(a) Then Return 1
+        If String.IsNullOrEmpty(b) Then Return -1
+
+        Dim regex As New System.Text.RegularExpressions.Regex("(\d+)|(\D+)")
+        Dim matchesA = regex.Matches(a)
+        Dim matchesB = regex.Matches(b)
+        Dim count As Integer = Math.Min(matchesA.Count, matchesB.Count)
+
+        For i As Integer = 0 To count - 1
+            Dim strA As String = matchesA(i).Value
+            Dim strB As String = matchesB(i).Value
+
+            Dim numA As Long
+            Dim numB As Long
+            Dim isNumA As Boolean = Long.TryParse(strA, numA)
+            Dim isNumB As Boolean = Long.TryParse(strB, numB)
+
+            If isNumA AndAlso isNumB Then
+                Dim cmpNum As Integer = numA.CompareTo(numB)
+                If cmpNum <> 0 Then Return cmpNum
+            Else
+                Dim cmpStr As Integer = String.Compare(strA, strB, StringComparison.OrdinalIgnoreCase)
+                If cmpStr <> 0 Then Return cmpStr
+            End If
+        Next
+
+        Return matchesA.Count.CompareTo(matchesB.Count)
+    End Function
+
+    ''' <summary>
     ''' Calcula la posición (POS) y numeración sistemática de cada componente.
     ''' La posición (POS) se deriva directamente del número de 'Elemento' de la Lista de Materiales (BOM)
     ''' de Inventor (ej: Elemento 1 -> POS 01 -> D-659.01.00; Elemento 10 -> POS 10 -> D-659.10.00).
     ''' Si un componente o su ensamble padre es soldado, se utiliza el delimitador '/' (ej: D-659.02/01 o OT-26282.04.06/01).
+    ''' Resuelve piezas compartidas asignando el código proveniente del subensamblaje con menor/primer orden alfanumérico.
     ''' </summary>
-    Private Sub AutoNumerarElementos()
+    Public Sub AutoNumerarElementos()
         Dim parentCounters As New Dictionary(Of String, Integer)(StringComparer.OrdinalIgnoreCase)
         Dim digitos As Integer = If(cmbDigitos.SelectedIndex = 1, 3, If(cmbDigitos.SelectedIndex = 2, 1, 2))
         Dim separador As String = If(cmbSeparador.SelectedItem IsNot Nothing, cmbSeparador.SelectedItem.ToString(), ".")
@@ -2031,16 +2298,8 @@ Public Class AsignarPadresDialog
             End If
         Next
 
-        ' Ordenar los items respetando el orden natural y jerárquico del BOM de Inventor
-        _items.Sort(Function(x, y)
-                        Dim prioX As Integer = If(x.IsCommercial, 2, If(x.IsContentCenter, 3, 1))
-                        Dim prioY As Integer = If(y.IsCommercial, 2, If(y.IsContentCenter, 3, 1))
-                        If prioX <> prioY Then Return prioX.CompareTo(prioY)
-                        Return CompararItemNumbersBOM(x.ItemNumber, y.ItemNumber)
-                    End Function)
-
+        ' Sincronizar SuggestedPadre de cada elemento con el código de su contenedor padre
         For Each item In _items
-            ' 0. Sincronizar SuggestedPadre con el ensamble padre directo
             If item.ParentItem IsNot Nothing Then
                 Dim parentEffectiveCode As String = If(Not String.IsNullOrEmpty(item.ParentItem.ProposedCode), item.ParentItem.ProposedCode, item.ParentItem.CurrentStockNumber)
                 If Not String.IsNullOrEmpty(parentEffectiveCode) Then
@@ -2051,9 +2310,59 @@ Public Class AsignarPadresDialog
                     item.SuggestedPadre = rootCode
                 End If
             End If
+        Next
 
+        ' Identificar piezas compartidas en múltiples subensamblajes
+        ' Agrupar componentes de fabricación (no comerciales ni CC) por archivo y estado de modelo
+        Dim gruposCompartidos As New Dictionary(Of String, List(Of ElementoPadreItem))(StringComparer.OrdinalIgnoreCase)
+        For Each item In _items
+            If Not item.IsCommercial AndAlso Not item.IsContentCenter AndAlso Not item.IsAssembly Then
+                Dim docKey As String = (item.DocumentPath & "|" & item.ModelStateName).ToLowerInvariant()
+                If Not gruposCompartidos.ContainsKey(docKey) Then
+                    gruposCompartidos(docKey) = New List(Of ElementoPadreItem)()
+                End If
+                gruposCompartidos(docKey).Add(item)
+            End If
+        Next
+
+        Dim mapaPrimarias As New Dictionary(Of String, ElementoPadreItem)(StringComparer.OrdinalIgnoreCase)
+        For Each kvp In gruposCompartidos
+            Dim groupList = kvp.Value
+            If groupList.Count > 1 Then
+                ' La pieza existe en dos o más ensamblajes
+                ' Se ordena según el orden alfanumérico del subensamblaje padre sugerido (ej: D-646.B.01.00 antes de D-646.B.05.00)
+                groupList.Sort(Function(x, y) CompararCodigosAlfanumericos(x.SuggestedPadre, y.SuggestedPadre))
+
+                Dim primaryItem = groupList(0)
+                primaryItem.IsShared = True
+                primaryItem.IsReusedInstance = False
+                primaryItem.SharedPrimaryPadre = primaryItem.SuggestedPadre
+                mapaPrimarias(kvp.Key) = primaryItem
+
+                For gIdx As Integer = 1 To groupList.Count - 1
+                    Dim reusedItem = groupList(gIdx)
+                    reusedItem.IsShared = True
+                    reusedItem.IsReusedInstance = True
+                    reusedItem.SharedPrimaryPadre = primaryItem.SuggestedPadre
+                    ' Se destilda de la columna Inc. para quedar fuera de procesamiento presente y reutilizar la pieza ya fabricada
+                    reusedItem.Included = False
+                Next
+            ElseIf groupList.Count = 1 Then
+                groupList(0).IsShared = False
+                groupList(0).IsReusedInstance = False
+            End If
+        Next
+
+        ' Ordenar los items respetando el orden natural y jerárquico del BOM de Inventor
+        _items.Sort(Function(x, y)
+                        Dim prioX As Integer = If(x.IsCommercial, 2, If(x.IsContentCenter, 3, 1))
+                        Dim prioY As Integer = If(y.IsCommercial, 2, If(y.IsContentCenter, 3, 1))
+                        If prioX <> prioY Then Return prioX.CompareTo(prioY)
+                        Return CompararItemNumbersBOM(x.ItemNumber, y.ItemNumber)
+                    End Function)
+
+        For Each item In _items
             ' 1. Comerciales (COM): NUNCA reciben numeración secuencial de padres.
-            ' Conservan siempre su código comercial propio y posición '-'.
             If item.IsCommercial Then
                 item.ProposedPosition = "-"
                 item.ProposedCode = item.CodigoComercial
@@ -2073,32 +2382,62 @@ Public Class AsignarPadresDialog
                 Continue For
             End If
 
-            ' 3. Omitir si el usuario desmarcó el checkbox en la grilla
-            If Not item.Included Then
-                item.ProposedPosition = "-"
-                item.ProposedCode = item.CurrentStockNumber
+            ' 3. Instancia reutilizada de pieza compartida: se resolverá tras numerar la instancia primaria
+            If item.IsReusedInstance Then
                 Continue For
             End If
 
-            ' 4. Respetar edición manual si el usuario modificó la celda
+            ' 4. Componente fuera de la corrida actual (desmarcado por el usuario o asignación previa protegida)
+            If Not item.Included Then
+                item.ProposedPosition = If(Not String.IsNullOrEmpty(item.ProposedPosition) AndAlso item.ProposedPosition <> "-", item.ProposedPosition, "-")
+                item.ProposedCode = If(Not String.IsNullOrEmpty(item.ProposedCode), item.ProposedCode, item.CurrentStockNumber)
+                Continue For
+            End If
+
+            ' 5. Respetar edición manual si el usuario modificó la celda
             If item.ManualOverride Then Continue For
 
-            ' 5. Posición (POS) tomada directamente desde la columna 'Elemento' del BOM de Inventor
+            ' 6. Posición (POS): tomada prioritariamente del número de 'Elemento' de la Lista de Materiales (BOM)
+            ' estructurada del ensamblaje (ej: BABETA LARGA en Elemento 2 -> POS 02; LATERAL RETORNO en Elemento 1 -> POS 01)
             Dim padreKey As String = If(Not String.IsNullOrEmpty(item.SuggestedPadre), item.SuggestedPadre, "PADRE")
             If Not parentCounters.ContainsKey(padreKey) Then
                 parentCounters(padreKey) = 1
             End If
 
-            Dim currentSeq As Integer = parentCounters(padreKey)
-            parentCounters(padreKey) += 1
+            ' Determinar posiciones ya reservadas en este subensamblaje por ediciones manuales o elementos previos no incluidos
+            Dim posicionesOcupadas As New HashSet(Of Integer)()
+            For Each it In _items
+                If String.Equals(it.SuggestedPadre, padreKey, StringComparison.OrdinalIgnoreCase) Then
+                    If it.ManualOverride OrElse (Not it.Included AndAlso it.HasPreviousAssignment) Then
+                        Dim valPos As Integer
+                        Dim cleanPos As String = it.ProposedPosition.Replace("(Reut.)", "").Trim()
+                        If Integer.TryParse(cleanPos, valPos) AndAlso valPos > 0 Then
+                            posicionesOcupadas.Add(valPos)
+                        End If
+                    End If
+                End If
+            Next
 
-            ' Tomar la POS desde la columna Elemento (item.ItemNumber) respetando la cantidad de dígitos configurada
-            Dim posStr As String = ObtenerPosicionDeElemento(item.ItemNumber, digitos, currentSeq)
+            Dim posStr As String = ""
+            Dim localNum As Integer = 0
+            Dim cleanLocal As String = ObtenerUltimoSegmentoItemNumber(If(Not String.IsNullOrEmpty(item.LocalItemNumber), item.LocalItemNumber, item.ItemNumber))
+            Dim tieneNumBOMValido As Boolean = Integer.TryParse(cleanLocal, localNum) AndAlso localNum > 0
+
+            If tieneNumBOMValido Then
+                posStr = localNum.ToString().PadLeft(digitos, "0"c)
+                parentCounters(padreKey) = Math.Max(parentCounters(padreKey), localNum + 1)
+            Else
+                Dim currentSeq As Integer = parentCounters(padreKey)
+                While posicionesOcupadas.Contains(currentSeq)
+                    currentSeq += 1
+                End While
+                posStr = currentSeq.ToString().PadLeft(digitos, "0"c)
+                parentCounters(padreKey) = currentSeq + 1
+            End If
+
             item.ProposedPosition = posStr
 
             ' Determinar si la numeración utiliza '/' (conjunto soldado) o el separador estándar ('.')
-            ' - Pieza soldada: marcada directamente como soldada, o su ensamble padre es soldado
-            ' - Subensamblaje: si su padre directo es soldado, usa '/'
             Dim esSoldado As Boolean = False
             If Not item.IsAssembly Then
                 If item.IsSoldado Then
@@ -2119,6 +2458,20 @@ Public Class AsignarPadresDialog
             item.ProposedCode = FormatearCodigoConPadre(padreKey, posStr, esSoldado, separador)
         Next
 
+        ' Sincronizar piezas compartidas reutilizadas con su código originario
+        For Each item In _items
+            If item.IsReusedInstance Then
+                Dim docKey As String = (item.DocumentPath & "|" & item.ModelStateName).ToLowerInvariant()
+                If mapaPrimarias.ContainsKey(docKey) Then
+                    Dim primary = mapaPrimarias(docKey)
+                    If Not item.ManualOverride Then
+                        item.ProposedCode = primary.ProposedCode
+                        item.ProposedPosition = If(Not String.IsNullOrEmpty(primary.ProposedPosition), primary.ProposedPosition & " (Reut.)", "(Reut.)")
+                    End If
+                End If
+            End If
+        Next
+
         RefrescarGrilla()
     End Sub
 
@@ -2127,7 +2480,7 @@ Public Class AsignarPadresDialog
     ''' Muestra primero las piezas de fabricación, seguidas de los componentes comerciales (COM) y de librería (CC).
     ''' Permite filtrar por la rama seleccionada en el árbol si la opción está activa.
     ''' </summary>
-    Private Sub RefrescarGrilla()
+    Public Sub RefrescarGrilla()
         ' Preservar posición de scroll y selección previa para evitar saltos molestos al interactuar
         Dim prevScrollIndex As Integer = 0
         Dim prevSelectedItem As ElementoPadreItem = Nothing
@@ -2141,6 +2494,7 @@ Public Class AsignarPadresDialog
 
         _grid.SuspendLayout()
         _grid.Rows.Clear()
+        ActualizarEstadoBotonHuecos()
 
         Dim filtroTexto As String = If(txtBuscar IsNot Nothing, txtBuscar.Text.Trim().ToLower(), "")
         Dim aNumerarCount As Integer = 0
@@ -2152,11 +2506,15 @@ Public Class AsignarPadresDialog
             itemsFiltradosRama = ObtenerItemsDeRamaNodo(_filtroRamaSeleccionada)
         End If
 
-        ' Agrupar elementos para presentación ordenada: Fabricación primero, luego Comerciales, luego Content Center
+        ' Agrupar elementos para presentación: si el usuario ordenó por columna se respeta ese orden
         Dim itemsParaMostrar As New List(Of ElementoPadreItem)()
-        itemsParaMostrar.AddRange(_items.Where(Function(i) Not i.IsCommercial AndAlso Not i.IsContentCenter))
-        itemsParaMostrar.AddRange(_items.Where(Function(i) i.IsCommercial))
-        itemsParaMostrar.AddRange(_items.Where(Function(i) i.IsContentCenter))
+        If _sortColumn >= 0 Then
+            itemsParaMostrar.AddRange(_items)
+        Else
+            itemsParaMostrar.AddRange(_items.Where(Function(i) Not i.IsCommercial AndAlso Not i.IsContentCenter))
+            itemsParaMostrar.AddRange(_items.Where(Function(i) i.IsCommercial))
+            itemsParaMostrar.AddRange(_items.Where(Function(i) i.IsContentCenter))
+        End If
 
         Dim rowToSelect As DataGridViewRow = Nothing
 
@@ -2223,6 +2581,29 @@ Public Class AsignarPadresDialog
                 modificadosCount += 1
             End If
 
+            If item.IsReusedInstance Then
+                row.Cells("ColPos").Style.ForeColor = Color.FromArgb(124, 58, 237)
+                row.Cells("ColPos").ToolTipText = "Pieza compartida: reutilizada desde ensamble " & item.SharedPrimaryPadre
+                row.Cells("ColNuevoCodigo").Style.ForeColor = Color.FromArgb(13, 148, 136)
+                row.Cells("ColNuevoCodigo").ToolTipText = "Código proveniente de ensamble originario (" & item.SharedPrimaryPadre & ")"
+            End If
+
+            If item.HasPreviousAssignment AndAlso Not item.Included Then
+                row.Cells("ColInc").ToolTipText = "Componente con asignación previa (destildado para no sobreescribir)"
+            End If
+
+            If item.ManualOverride Then
+                row.Cells("ColNuevoCodigo").Style.Font = New Font("Segoe UI", 9.0F, FontStyle.Bold Or FontStyle.Italic)
+                row.Cells("ColNuevoCodigo").ToolTipText = "Editado manualmente (fuera de proceso automático)"
+            End If
+
+            If item.HasPrecedingGap Then
+                row.Cells("ColItem").Style.BackColor = Color.FromArgb(254, 243, 199)
+                row.Cells("ColItem").Style.ForeColor = Color.FromArgb(180, 83, 9)
+                row.Cells("ColItem").Style.Font = New Font("Segoe UI", 8.5F, FontStyle.Bold)
+                row.Cells("ColItem").ToolTipText = String.Format("Hueco detectado en BOM: falta el elemento {0} en la secuencia de este subensamblaje", item.PrecedingGapNumber)
+            End If
+
             If item.Included AndAlso Not item.IsCommercial AndAlso Not item.IsContentCenter Then
                 aNumerarCount += 1
             End If
@@ -2244,6 +2625,28 @@ Public Class AsignarPadresDialog
 
             If prevScrollIndex >= 0 AndAlso prevScrollIndex < _grid.Rows.Count Then
                 _grid.FirstDisplayedScrollingRowIndex = prevScrollIndex
+            End If
+        Catch
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Actualiza visualmente el estado del botón 'Huecos en BOM' según los resultados de la auditoría.
+    ''' </summary>
+    Private Sub ActualizarEstadoBotonHuecos()
+        Try
+            If btnAuditarHuecos Is Nothing Then Return
+            Dim huecos = DetectarHuecosElementosBOM()
+            If huecos.Count > 0 Then
+                btnAuditarHuecos.Text = "⚠️ Huecos en BOM (" & huecos.Count.ToString() & ")"
+                btnAuditarHuecos.BackColor = Color.FromArgb(254, 243, 199)
+                btnAuditarHuecos.ForeColor = Color.FromArgb(180, 83, 9)
+                btnAuditarHuecos.FlatAppearance.BorderColor = Color.FromArgb(252, 211, 77)
+            Else
+                btnAuditarHuecos.Text = "✓ Secuencia BOM OK"
+                btnAuditarHuecos.BackColor = Color.FromArgb(241, 245, 249)
+                btnAuditarHuecos.ForeColor = Color.FromArgb(71, 85, 105)
+                btnAuditarHuecos.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225)
             End If
         Catch
         End Try
@@ -2611,6 +3014,8 @@ Public Class AsignarPadresDialog
             Dim esSoldado As Boolean = item.IsSoldado OrElse (item.ParentItem IsNot Nothing AndAlso item.ParentItem.IsSoldado)
             item.ProposedCode = FormatearCodigoConPadre(item.SuggestedPadre, val, esSoldado, separador)
             item.ManualOverride = True
+            item.Included = False
+            _grid.Rows(e.RowIndex).Cells("ColInc").Value = False
             _grid.Rows(e.RowIndex).Cells("ColNuevoCodigo").Value = item.ProposedCode
             ActualizarDetallesItem(item)
             If item.IsAssembly Then
@@ -2621,12 +3026,185 @@ Public Class AsignarPadresDialog
             Dim val As String = If(_grid.Rows(e.RowIndex).Cells(e.ColumnIndex).Value IsNot Nothing, _grid.Rows(e.RowIndex).Cells(e.ColumnIndex).Value.ToString(), "")
             item.ProposedCode = val
             item.ManualOverride = True
+            item.Included = False
+            _grid.Rows(e.RowIndex).Cells("ColInc").Value = False
             ActualizarDetallesItem(item)
             If item.IsAssembly Then
                 AutoNumerarElementos()
                 ConstruirArbolJerarquico()
             End If
+        ElseIf colName = "ColItem" Then
+            Dim valStr As String = If(_grid.Rows(e.RowIndex).Cells(e.ColumnIndex).Value IsNot Nothing, _grid.Rows(e.RowIndex).Cells(e.ColumnIndex).Value.ToString().Trim(), "")
+            If Not String.IsNullOrEmpty(valStr) Then
+                item.LocalItemNumber = valStr
+                Dim lastDot As Integer = item.ItemNumber.LastIndexOf("."c)
+                If lastDot >= 0 Then
+                    item.ItemNumber = item.ItemNumber.Substring(0, lastDot + 1) & valStr
+                Else
+                    item.ItemNumber = valStr
+                End If
+                AutoNumerarElementos()
+            End If
         End If
+    End Sub
+
+    ''' <summary>
+    ''' Permite ordenar interactivamente las filas de la tabla al hacer clic en cualquier encabezado de columna.
+    ''' Conmuta entre orden ascendente y descendente (mostrando ▲ / ▼).
+    ''' </summary>
+    Private Sub Grid_ColumnHeaderMouseClick(sender As Object, e As DataGridViewCellMouseEventArgs)
+        Try
+            If e.ColumnIndex < 0 OrElse _grid Is Nothing OrElse _grid.Columns Is Nothing Then Return
+
+            If _sortColumn = e.ColumnIndex Then
+                _sortAscending = Not _sortAscending
+            Else
+                _sortColumn = e.ColumnIndex
+                _sortAscending = True
+            End If
+
+            For Each col As DataGridViewColumn In _grid.Columns
+                If col IsNot Nothing AndAlso Not String.IsNullOrEmpty(col.HeaderText) Then
+                    Dim clean As String = col.HeaderText.Replace(" ▲", "").Replace(" ▼", "")
+                    col.HeaderText = clean
+                End If
+            Next
+
+            If _sortColumn >= 0 AndAlso _sortColumn < _grid.Columns.Count Then
+                Dim activeCol = _grid.Columns(_sortColumn)
+                If activeCol IsNot Nothing Then
+                    activeCol.HeaderText &= If(_sortAscending, " ▲", " ▼")
+                End If
+            End If
+
+            OrdenarItemsPorColumna(_sortColumn, _sortAscending)
+            RefrescarGrilla()
+        Catch ex As Exception
+            ' Proteger ante excepciones no controladas al interactuar con los encabezados
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Ordena la lista de items según la columna seleccionada por el usuario.
+    ''' </summary>
+    Private Sub OrdenarItemsPorColumna(colIndex As Integer, ascending As Boolean)
+        Try
+            If _items Is Nothing OrElse _items.Count <= 1 Then Return
+
+            _items.Sort(Function(x, y)
+                            If x Is Nothing AndAlso y Is Nothing Then Return 0
+                            If x Is Nothing Then Return 1
+                            If y Is Nothing Then Return -1
+
+                            Dim res As Integer = 0
+                            Select Case colIndex
+                                Case 0 ' Inc
+                                    res = x.Included.CompareTo(y.Included)
+                                Case 1 ' Elemento (BOM)
+                                    res = CompararItemNumbersBOM(x.ItemNumber, y.ItemNumber)
+                                Case 2 ' Nivel
+                                    res = x.Level.CompareTo(y.Level)
+                                Case 3 ' Componente / Rama
+                                    res = String.Compare(If(x.FileName, ""), If(y.FileName, ""), StringComparison.OrdinalIgnoreCase)
+                                Case 4 ' Tipo
+                                    res = String.Compare(If(x.ColumnaTipo, ""), If(y.ColumnaTipo, ""), StringComparison.OrdinalIgnoreCase)
+                                Case 5 ' Cantidad
+                                    res = x.Quantity.CompareTo(y.Quantity)
+                                Case 6 ' Ensamble Padre
+                                    res = CompararCodigosAlfanumericos(If(x.SuggestedPadre, ""), If(y.SuggestedPadre, ""))
+                                Case 7 ' POS
+                                    Dim posX, posY As Integer
+                                    Dim cleanX As String = If(x.ProposedPosition IsNot Nothing, x.ProposedPosition.Replace("(Reut.)", "").Trim(), "")
+                                    Dim cleanY As String = If(y.ProposedPosition IsNot Nothing, y.ProposedPosition.Replace("(Reut.)", "").Trim(), "")
+                                    Dim isNumX As Boolean = Integer.TryParse(cleanX, posX)
+                                    Dim isNumY As Boolean = Integer.TryParse(cleanY, posY)
+                                    If isNumX AndAlso isNumY Then
+                                        res = posX.CompareTo(posY)
+                                    Else
+                                        res = String.Compare(cleanX, cleanY, StringComparison.OrdinalIgnoreCase)
+                                    End If
+                                Case 8 ' Nº Almacenamiento Actual
+                                    res = CompararCodigosAlfanumericos(If(x.CurrentStockNumber, ""), If(y.CurrentStockNumber, ""))
+                                Case 9 ' Soldado
+                                    res = x.IsSoldado.CompareTo(y.IsSoldado)
+                                Case 10 ' Nuevo Código Propuesto
+                                    res = CompararCodigosAlfanumericos(If(x.ProposedCode, ""), If(y.ProposedCode, ""))
+                                Case 11 ' Part Number Actual
+                                    res = String.Compare(If(x.CurrentPartNumber, ""), If(y.CurrentPartNumber, ""), StringComparison.OrdinalIgnoreCase)
+                                Case Else
+                                    res = 0
+                            End Select
+                            If Not ascending Then res = -res
+                            Return res
+                        End Function)
+        Catch ex As Exception
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Permite al usuario procesar nuevamente todo el ensamble desde cero como si nada se hubiera destildado,
+    ''' marcando todas las casillas 'Inc.', eliminando bloqueos por asignaciones previas y descartando ediciones manuales.
+    ''' </summary>
+    Private Sub BtnSobreescribirAnteriores_Click(sender As Object, e As EventArgs)
+        Dim res = MessageBox.Show(
+            "¿Desea sobreescribir todos los datos anteriores?" & vbCrLf & vbCrLf &
+            "Esta acción marcará todos los componentes de fabricación ('Inc.' = SÍ), " &
+            "descartará las ediciones manuales y renumerará sistemáticamente el ensamble completo.",
+            "Sobreescribir datos anteriores",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question)
+
+        If res <> DialogResult.Yes Then Return
+
+        For Each item In _items
+            item.ManualOverride = False
+            item.HasPreviousAssignment = False
+            If Not item.IsCommercial AndAlso Not item.IsContentCenter Then
+                item.Included = True
+            End If
+        Next
+
+        AutoNumerarElementos()
+        ConstruirArbolJerarquico()
+        RefrescarGrilla()
+    End Sub
+
+    ''' <summary>
+    ''' Abre el diálogo de auditoría y resolución de huecos en la columna Elemento del BOM estructurado.
+    ''' </summary>
+    Private Sub BtnAuditarHuecos_Click(sender As Object, e As EventArgs)
+        Try
+            Dim huecos = DetectarHuecosElementosBOM()
+            If huecos.Count = 0 Then
+                MessageBox.Show(Me,
+                                "No se detectaron saltos en la columna de Elemento." & vbCrLf & vbCrLf &
+                                "Todas las secuencias de componentes bajo sus respectivos ensambles padres son continuas y completas.",
+                                "Secuencia de BOM Completa", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+
+            Dim prevTopMost As Boolean = Me.TopMost
+            Try
+                ' Desactivar temporalmente TopMost en el formulario padre para que el diálogo secundario no quede atrapado detrás
+                Me.TopMost = False
+
+                Using dlg As New ResolverHuecosBOMDialog(Me, _items)
+                    dlg.TopMost = True
+                    dlg.Owner = Me
+                    dlg.StartPosition = FormStartPosition.CenterParent
+                    Dim dr As DialogResult = dlg.ShowDialog(Me)
+                    If dr = DialogResult.OK OrElse dlg.CambiosRealizados Then
+                        AutoNumerarElementos()
+                        RefrescarGrilla()
+                    End If
+                End Using
+            Finally
+                Me.TopMost = If(chkTopMost IsNot Nothing AndAlso chkTopMost.Checked, True, prevTopMost)
+                HabilitarVentanaInventor()
+            End Try
+        Catch ex As Exception
+            MessageBox.Show(Me, "Error al auditar huecos en BOM: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        End Try
     End Sub
 
     Private Sub BtnZoom_Click(sender As Object, e As EventArgs)
@@ -2960,3 +3538,331 @@ Public Class AsignarPadresDialog
         End Try
     End Sub
 End Class
+
+''' <summary>
+''' Diálogo interactivo para detectar y resolver saltos en la columna Elemento (Lista de Materiales Estructurada).
+''' Permite al usuario seleccionar qué componente existente toma el número faltante, renumerando automáticamente.
+''' </summary>
+Public Class ResolverHuecosBOMDialog
+    Inherits Form
+
+    Private ReadOnly _parentDialog As AsignarPadresDialog
+    Private ReadOnly _items As List(Of ElementoPadreItem)
+    Private cmbHuecos As ComboBox
+    Private cmbComponentes As ComboBox
+    Private btnAceptar As Button
+    Private btnCancelar As Button
+    Private btnAplicar As Button
+    Private lblDetalleHueco As Label
+    Private _huecosActuales As List(Of HuecoElementoInfo)
+
+    ''' <summary>
+    ''' Indica si se aplicó al menos una reasignación durante el ciclo de vida del diálogo.
+    ''' </summary>
+    Public Property CambiosRealizados As Boolean = False
+
+    Public Sub New(parentDialog As AsignarPadresDialog, items As List(Of ElementoPadreItem))
+        _parentDialog = parentDialog
+        _items = items
+        InitializeCustomComponents()
+        CargarHuecos()
+    End Sub
+
+    Private Sub InitializeCustomComponents()
+        Me.Text = "Resolver Huecos en Sucesión de Elementos de BOM"
+        Me.Size = New Size(620, 390)
+        Me.StartPosition = FormStartPosition.CenterParent
+        Me.FormBorderStyle = FormBorderStyle.FixedDialog
+        Me.MaximizeBox = False
+        Me.MinimizeBox = False
+        Me.ShowInTaskbar = False
+        Me.TopMost = True
+        Me.BackColor = Color.FromArgb(248, 250, 252)
+        Me.Font = New Font("Segoe UI", 9.0F)
+
+        ' Asegurar que el diálogo se mantenga al frente y no quede oculto detrás de la ventana principal
+        AddHandler Me.Shown, Sub()
+                                 Try
+                                     Me.BringToFront()
+                                     Me.Activate()
+                                     Me.Focus()
+                                 Catch
+                                 End Try
+                             End Sub
+
+        Dim pnlHeader As New Panel() With {
+            .Dock = DockStyle.Top,
+            .Height = 70,
+            .BackColor = Color.FromArgb(254, 243, 199),
+            .Padding = New Padding(16, 12, 16, 12)
+        }
+        Dim lblTitle As New Label() With {
+            .Text = "⚠️ Detección de Faltantes en la Sucesión de Elementos de BOM",
+            .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold),
+            .ForeColor = Color.FromArgb(146, 64, 14),
+            .AutoSize = True,
+            .Location = New Point(16, 10)
+        }
+        Dim lblSubtitle As New Label() With {
+            .Text = "En la lista de materiales estructurada faltan números de Elemento (ej: 1, 2, 3, 5 -> falta 4)." & vbCrLf & "Seleccione un componente existente para tomar el número faltante y renumerar.",
+            .Font = New Font("Segoe UI", 8.25F),
+            .ForeColor = Color.FromArgb(180, 83, 9),
+            .AutoSize = True,
+            .Location = New Point(16, 32)
+        }
+        pnlHeader.Controls.Add(lblTitle)
+        pnlHeader.Controls.Add(lblSubtitle)
+        Me.Controls.Add(pnlHeader)
+
+        ' Panel central
+        Dim pnlBody As New Panel() With {
+            .Dock = DockStyle.Fill,
+            .Padding = New Padding(20, 15, 20, 15)
+        }
+
+        Dim lblPaso1 As New Label() With {
+            .Text = "1. Elemento faltante detectado:",
+            .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
+            .ForeColor = Color.FromArgb(30, 41, 59),
+            .Location = New Point(20, 15),
+            .AutoSize = True
+        }
+        pnlBody.Controls.Add(lblPaso1)
+
+        cmbHuecos = New ComboBox() With {
+            .Location = New Point(20, 38),
+            .Size = New Size(560, 26),
+            .DropDownStyle = ComboBoxStyle.DropDownList,
+            .Font = New Font("Segoe UI", 9.0F)
+        }
+        AddHandler cmbHuecos.SelectedIndexChanged, AddressOf CmbHuecos_SelectedIndexChanged
+        pnlBody.Controls.Add(cmbHuecos)
+
+        Dim lblPaso2 As New Label() With {
+            .Text = "2. Seleccionar componente existente que tomará el número faltante:",
+            .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
+            .ForeColor = Color.FromArgb(30, 41, 59),
+            .Location = New Point(20, 80),
+            .AutoSize = True
+        }
+        pnlBody.Controls.Add(lblPaso2)
+
+        cmbComponentes = New ComboBox() With {
+            .Location = New Point(20, 103),
+            .Size = New Size(560, 26),
+            .DropDownStyle = ComboBoxStyle.DropDownList,
+            .Font = New Font("Segoe UI", 9.0F)
+        }
+        pnlBody.Controls.Add(cmbComponentes)
+
+        lblDetalleHueco = New Label() With {
+            .Location = New Point(20, 145),
+            .Size = New Size(560, 45),
+            .ForeColor = Color.FromArgb(71, 85, 105),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Italic)
+        }
+        pnlBody.Controls.Add(lblDetalleHueco)
+
+        Me.Controls.Add(pnlBody)
+
+        ' Panel inferior con botones: Cancelar, Aceptar y Aplicar
+        Dim pnlBottom As New Panel() With {
+            .Dock = DockStyle.Bottom,
+            .Height = 56,
+            .BackColor = Color.FromArgb(241, 245, 249),
+            .Padding = New Padding(16, 10, 16, 10)
+        }
+
+        Dim sepBottom As New Panel() With {
+            .Dock = DockStyle.Top,
+            .Height = 1,
+            .BackColor = Color.FromArgb(226, 232, 240)
+        }
+        pnlBottom.Controls.Add(sepBottom)
+
+        btnCancelar = New Button() With {
+            .Text = "Cancelar",
+            .Size = New Size(95, 34),
+            .Location = New Point(490, 11),
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
+            .BackColor = Color.White,
+            .ForeColor = Color.FromArgb(51, 65, 85),
+            .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand,
+            .DialogResult = DialogResult.Cancel
+        }
+        btnCancelar.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225)
+        AddHandler btnCancelar.Click, AddressOf BtnCancelar_Click
+        pnlBottom.Controls.Add(btnCancelar)
+
+        btnAceptar = New Button() With {
+            .Text = "Aceptar",
+            .Size = New Size(105, 34),
+            .Location = New Point(375, 11),
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
+            .BackColor = Color.FromArgb(2, 132, 199),
+            .ForeColor = Color.White,
+            .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand,
+            .DialogResult = DialogResult.OK
+        }
+        btnAceptar.FlatAppearance.BorderSize = 0
+        AddHandler btnAceptar.Click, AddressOf BtnAceptar_Click
+        pnlBottom.Controls.Add(btnAceptar)
+
+        btnAplicar = New Button() With {
+            .Text = "Aplicar",
+            .Size = New Size(95, 34),
+            .Location = New Point(270, 11),
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
+            .BackColor = Color.White,
+            .ForeColor = Color.FromArgb(2, 132, 199),
+            .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnAplicar.FlatAppearance.BorderColor = Color.FromArgb(186, 230, 253)
+        AddHandler btnAplicar.Click, AddressOf BtnAplicar_Click
+        pnlBottom.Controls.Add(btnAplicar)
+
+        Me.AcceptButton = btnAceptar
+        Me.CancelButton = btnCancelar
+
+        Me.Controls.Add(pnlBottom)
+    End Sub
+
+    Public Sub CargarHuecos()
+        cmbHuecos.Items.Clear()
+        cmbComponentes.Items.Clear()
+        _huecosActuales = _parentDialog.DetectarHuecosElementosBOM()
+
+        If _huecosActuales.Count = 0 Then
+            cmbHuecos.Items.Add("✓ No se detectaron huecos. Secuencia de BOM completa.")
+            cmbHuecos.SelectedIndex = 0
+            cmbHuecos.Enabled = False
+            cmbComponentes.Enabled = False
+            If btnAplicar IsNot Nothing Then btnAplicar.Enabled = False
+            lblDetalleHueco.Text = "Todos los subensamblajes tienen números de elemento continuos."
+            Return
+        End If
+
+        cmbHuecos.Enabled = True
+        cmbComponentes.Enabled = True
+        If btnAplicar IsNot Nothing Then btnAplicar.Enabled = True
+
+        For Each h In _huecosActuales
+            cmbHuecos.Items.Add(h)
+        Next
+        cmbHuecos.SelectedIndex = 0
+    End Sub
+
+    Private Sub CmbHuecos_SelectedIndexChanged(sender As Object, e As EventArgs)
+        cmbComponentes.Items.Clear()
+        Dim h = TryCast(cmbHuecos.SelectedItem, HuecoElementoInfo)
+        If h Is Nothing Then Return
+
+        For Each it In h.ExistingItems
+            Dim itemDesc As String = String.Format("Elemento {0}: {1} ({2})",
+                                                   If(Not String.IsNullOrEmpty(it.LocalItemNumber), it.LocalItemNumber, it.ItemNumber),
+                                                   it.DisplayName,
+                                                   If(Not String.IsNullOrEmpty(it.ProposedCode), it.ProposedCode, it.CurrentStockNumber))
+            cmbComponentes.Items.Add(New ComponenteComboItem With {.Item = it, .Texto = itemDesc})
+        Next
+
+        ' Pre-seleccionar el componente con número inmediatamente posterior al faltante si existe
+        Dim bestIdx As Integer = 0
+        For i As Integer = 0 To h.ExistingItems.Count - 1
+            Dim clean = _parentDialog.ObtenerUltimoSegmentoItemNumber(h.ExistingItems(i).LocalItemNumber)
+            Dim nVal As Integer
+            If Integer.TryParse(clean, nVal) AndAlso nVal > h.MissingNumber Then
+                bestIdx = i
+                Exit For
+            End If
+        Next
+
+        If cmbComponentes.Items.Count > 0 Then
+            cmbComponentes.SelectedIndex = bestIdx
+        End If
+
+        lblDetalleHueco.Text = String.Format("En '{0}' falta el elemento {1}. Al asignar, este componente pasará a ser el elemento {1} y su POS será {2}.",
+                                             h.ParentName, h.MissingNumber, h.MissingNumber.ToString().PadLeft(2, "0"c))
+    End Sub
+
+    Private Function AplicarAsignacionActual(mostrarMensajeExito As Boolean) As Boolean
+        Dim h = TryCast(cmbHuecos.SelectedItem, HuecoElementoInfo)
+        Dim cItem = TryCast(cmbComponentes.SelectedItem, ComponenteComboItem)
+
+        If h Is Nothing OrElse cItem Is Nothing OrElse cItem.Item Is Nothing Then
+            Return False
+        End If
+
+        Dim it = cItem.Item
+        Dim missingNumStr = h.MissingNumber.ToString()
+
+        ' Sobreescribir el número de la columna Elemento
+        it.LocalItemNumber = missingNumStr
+        Dim lastDot = it.ItemNumber.LastIndexOf("."c)
+        If lastDot >= 0 Then
+            it.ItemNumber = it.ItemNumber.Substring(0, lastDot + 1) & missingNumStr
+        Else
+            it.ItemNumber = missingNumStr
+        End If
+
+        it.ManualOverride = False
+        it.Included = True
+
+        ' Renumerar y refrescar la grilla principal
+        _parentDialog.AutoNumerarElementos()
+        _parentDialog.RefrescarGrilla()
+
+        Me.CambiosRealizados = True
+
+        If mostrarMensajeExito Then
+            MessageBox.Show(Me,
+                            String.Format("¡Elemento asignado con éxito!" & vbCrLf & vbCrLf &
+                                          "Componente: {0}" & vbCrLf &
+                                          "Nuevo Elemento: {1}" & vbCrLf &
+                                          "Nueva Posición: {2}" & vbCrLf &
+                                          "Nuevo Código Propuesto: {3}",
+                                          it.DisplayName, missingNumStr, it.ProposedPosition, it.ProposedCode),
+                            "Elemento Faltante Asignado", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        End If
+
+        CargarHuecos()
+        Return True
+    End Function
+
+    Private Sub BtnAceptar_Click(sender As Object, e As EventArgs)
+        ' Si aún hay un hueco activo seleccionado con un componente válido, aplicar la asignación
+        If _huecosActuales IsNot Nothing AndAlso _huecosActuales.Count > 0 AndAlso cmbHuecos.Enabled Then
+            If cmbHuecos.SelectedItem IsNot Nothing AndAlso cmbComponentes.SelectedItem IsNot Nothing Then
+                AplicarAsignacionActual(mostrarMensajeExito:=False)
+            End If
+        End If
+
+        Me.DialogResult = DialogResult.OK
+        Me.Close()
+    End Sub
+
+    Private Sub BtnCancelar_Click(sender As Object, e As EventArgs)
+        Me.DialogResult = DialogResult.Cancel
+        Me.Close()
+    End Sub
+
+    Private Sub BtnAplicar_Click(sender As Object, e As EventArgs)
+        If Not AplicarAsignacionActual(mostrarMensajeExito:=True) Then
+            MessageBox.Show(Me, "Por favor seleccione un elemento faltante y un componente.", "Selección incompleta", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        End If
+    End Sub
+
+    Private Class ComponenteComboItem
+        Public Property Item As ElementoPadreItem
+        Public Property Texto As String
+        Public Overrides Function ToString() As String
+            Return Texto
+        End Function
+    End Class
+End Class
+

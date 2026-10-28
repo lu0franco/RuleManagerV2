@@ -4,7 +4,6 @@ Imports System.Drawing
 Imports System.Linq
 Imports System.Runtime.InteropServices
 Imports Inventor
-
 ''' <summary>
 ''' Diálogo compacto de asignación COM con indicador recursivo vía StateImageList.
 ''' Jerarquía visual: [StateImage toggle] [Image tipo] [Texto]
@@ -44,8 +43,14 @@ Public Class ComercialAssignmentDialog
     Private btnCancelar As Button
     Private btnRefrescar As Button
     Private btnSeleccionarModelo As Button
+    Private btnDesmarcarModelo As Button
     Private btnHighlightCom As Button
     Private chkSoloConCambios As CheckBox
+    Private txtBuscar As System.Windows.Forms.TextBox
+    Private btnExpandir As Button
+    Private btnColapsar As Button
+    Private btnMarcarTodos As Button
+    Private btnDesmarcarTodos As Button
 
     ' ImageLists
     Private _imageList As ImageList        ' Iconos de tipo (asm, ipt, cc, broken)
@@ -67,11 +72,11 @@ Public Class ComercialAssignmentDialog
     ' INICIALIZACION COMPACTA LATERAL
     ' =========================================================
     Private Sub InitializeComponent()
-        Me.Text = "Asignación COM"
-        Me.Size = New System.Drawing.Size(680, 700)
+        Me.Text = "Asignación de Comerciales (COM) - Inspector Jerárquico"
+        Me.Size = New System.Drawing.Size(780, 720)
         Me.StartPosition = FormStartPosition.Manual
         Me.Location = New System.Drawing.Point(50, 50)
-        Me.MinimumSize = New System.Drawing.Size(500, 400)
+        Me.MinimumSize = New System.Drawing.Size(580, 450)
         Me.FormBorderStyle = FormBorderStyle.Sizable
         Me.TopMost = True
 
@@ -82,17 +87,115 @@ Public Class ComercialAssignmentDialog
                                        HabilitarVentanaInventor()
                                    End Sub
 
-        ' --- Panel izquierdo: TreeView ---
+        ' --- Panel izquierdo: TreeView con barra superior de búsqueda y acciones ---
         Dim panelArbol As New Panel()
         panelArbol.Dock = DockStyle.Fill
 
-        Dim lblArbol As New Label()
-        lblArbol.Text = "[☑]=Tiene COM  [▣]=Parcial  [□]=Sin COM  Click=Toggle  Doble click=zoom"
-        lblArbol.Dock = DockStyle.Top
-        lblArbol.Height = 24
-        lblArbol.Padding = New Padding(5, 3, 5, 3)
-        lblArbol.Font = New Font("Segoe UI", 8)
-        lblArbol.BackColor = System.Drawing.Color.FromArgb(240, 240, 240)
+        Dim pnlArbolHeader As New Panel() With {
+            .Dock = DockStyle.Top,
+            .Height = 62,
+            .BackColor = System.Drawing.Color.FromArgb(241, 245, 249),
+            .Padding = New Padding(6, 6, 6, 6)
+        }
+
+        ' Fila 1: Búsqueda rápida y botones de expansión
+        txtBuscar = New System.Windows.Forms.TextBox() With {
+            .Location = New System.Drawing.Point(6, 6),
+            .Size = New System.Drawing.Size(260, 23),
+            .Font = New Font("Segoe UI", 9.0F)
+        }
+        Dim tipBuscar As New ToolTip()
+        tipBuscar.SetToolTip(txtBuscar, "Escriba texto para filtrar o resaltar componentes por nombre en el árbol.")
+        AddHandler txtBuscar.TextChanged, AddressOf TxtBuscar_TextChanged
+        pnlArbolHeader.Controls.Add(txtBuscar)
+
+        Dim btnLimpiar As New Button() With {
+            .Text = "✕",
+            .Location = New System.Drawing.Point(268, 5),
+            .Size = New System.Drawing.Size(26, 25),
+            .FlatStyle = FlatStyle.Flat,
+            .Font = New Font("Segoe UI", 7.5F, FontStyle.Bold),
+            .Cursor = Cursors.Hand,
+            .BackColor = System.Drawing.Color.White
+        }
+        btnLimpiar.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(203, 213, 225)
+        AddHandler btnLimpiar.Click, Sub() txtBuscar.Text = ""
+        pnlArbolHeader.Controls.Add(btnLimpiar)
+
+        btnExpandir = New Button() With {
+            .Text = "▾ Todo",
+            .Location = New System.Drawing.Point(300, 5),
+            .Size = New System.Drawing.Size(62, 25),
+            .FlatStyle = FlatStyle.Flat,
+            .Font = New Font("Segoe UI", 8.0F),
+            .BackColor = System.Drawing.Color.White,
+            .Cursor = Cursors.Hand
+        }
+        btnExpandir.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(203, 213, 225)
+        Dim tipExp As New ToolTip()
+        tipExp.SetToolTip(btnExpandir, "Expandir todos los niveles del árbol.")
+        AddHandler btnExpandir.Click, Sub() tvArbol.ExpandAll()
+        pnlArbolHeader.Controls.Add(btnExpandir)
+
+        btnColapsar = New Button() With {
+            .Text = "▸ Colapsar",
+            .Location = New System.Drawing.Point(366, 5),
+            .Size = New System.Drawing.Size(74, 25),
+            .FlatStyle = FlatStyle.Flat,
+            .Font = New Font("Segoe UI", 8.0F),
+            .BackColor = System.Drawing.Color.White,
+            .Cursor = Cursors.Hand
+        }
+        btnColapsar.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(203, 213, 225)
+        Dim tipCol As New ToolTip()
+        tipCol.SetToolTip(btnColapsar, "Colapsar ramas del árbol.")
+        AddHandler btnColapsar.Click, Sub()
+                                          tvArbol.CollapseAll()
+                                          If tvArbol.Nodes.Count > 0 Then tvArbol.Nodes(0).Expand()
+                                      End Sub
+        pnlArbolHeader.Controls.Add(btnColapsar)
+
+        btnMarcarTodos = New Button() With {
+            .Text = "☑ Marcar",
+            .Location = New System.Drawing.Point(446, 5),
+            .Size = New System.Drawing.Size(72, 25),
+            .FlatStyle = FlatStyle.Flat,
+            .Font = New Font("Segoe UI", 8.0F, FontStyle.Bold),
+            .ForeColor = System.Drawing.Color.FromArgb(16, 149, 102),
+            .BackColor = System.Drawing.Color.White,
+            .Cursor = Cursors.Hand
+        }
+        btnMarcarTodos.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(167, 243, 208)
+        Dim tipMarcar As New ToolTip()
+        tipMarcar.SetToolTip(btnMarcarTodos, "Marcar todas las piezas visibles como comerciales.")
+        AddHandler btnMarcarTodos.Click, Sub() MarcarTodosLosVisibles(True)
+        pnlArbolHeader.Controls.Add(btnMarcarTodos)
+
+        btnDesmarcarTodos = New Button() With {
+            .Text = "☐ Desmarcar",
+            .Location = New System.Drawing.Point(522, 5),
+            .Size = New System.Drawing.Size(84, 25),
+            .FlatStyle = FlatStyle.Flat,
+            .Font = New Font("Segoe UI", 8.0F, FontStyle.Bold),
+            .ForeColor = System.Drawing.Color.FromArgb(194, 65, 12),
+            .BackColor = System.Drawing.Color.White,
+            .Cursor = Cursors.Hand
+        }
+        btnDesmarcarTodos.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(254, 215, 170)
+        Dim tipDesmTodos As New ToolTip()
+        tipDesmTodos.SetToolTip(btnDesmarcarTodos, "Quitar la marca de comerciales a todas las piezas.")
+        AddHandler btnDesmarcarTodos.Click, Sub() MarcarTodosLosVisibles(False)
+        pnlArbolHeader.Controls.Add(btnDesmarcarTodos)
+
+        ' Fila 2: Leyenda explicativa
+        Dim lblArbol As New Label() With {
+            .Text = "[☑]=Tiene COM  [▣]=Parcial  [□]=Sin COM  •  Click casilla = Toggle  •  Doble click = Zoom 3D",
+            .Location = New System.Drawing.Point(8, 36),
+            .Size = New System.Drawing.Size(595, 20),
+            .Font = New Font("Segoe UI", 8.25F),
+            .ForeColor = System.Drawing.Color.FromArgb(71, 85, 105)
+        }
+        pnlArbolHeader.Controls.Add(lblArbol)
 
         ' Crear ImageLists
         _imageList = CrearImageList()
@@ -104,19 +207,20 @@ Public Class ComercialAssignmentDialog
         tvArbol.ImageList = _imageList
         tvArbol.StateImageList = _stateImageList
         tvArbol.FullRowSelect = True
+        tvArbol.Font = New Font("Segoe UI", 8.75F)
 
         AddHandler tvArbol.NodeMouseClick, AddressOf TvArbol_NodeMouseClick
         AddHandler tvArbol.NodeMouseDoubleClick, AddressOf TvArbol_NodeMouseDoubleClick
         AddHandler tvArbol.MouseClick, AddressOf TvArbol_MouseClick
 
         panelArbol.Controls.Add(tvArbol)
-        panelArbol.Controls.Add(lblArbol)
+        panelArbol.Controls.Add(pnlArbolHeader)
 
-        ' --- Panel derecho: Botones ---
+        ' --- Panel derecho: Botones de Acción ---
         Dim panelBotones As New Panel()
         panelBotones.Dock = DockStyle.Right
-        panelBotones.Width = 150
-        panelBotones.BackColor = System.Drawing.Color.FromArgb(248, 248, 248)
+        panelBotones.Width = 165
+        panelBotones.BackColor = System.Drawing.Color.FromArgb(248, 250, 252)
         panelBotones.Padding = New Padding(8, 10, 8, 10)
 
         Dim y As Integer = 10
@@ -124,76 +228,90 @@ Public Class ComercialAssignmentDialog
         Dim lblTitulo As New Label()
         lblTitulo.Text = "Acciones"
         lblTitulo.Location = New System.Drawing.Point(8, y)
-        lblTitulo.Size = New System.Drawing.Size(134, 20)
-        lblTitulo.Font = New Font("Segoe UI", 9, FontStyle.Bold)
+        lblTitulo.Size = New System.Drawing.Size(148, 20)
+        lblTitulo.Font = New Font("Segoe UI", 9.5F, FontStyle.Bold)
+        lblTitulo.ForeColor = System.Drawing.Color.FromArgb(15, 23, 42)
         panelBotones.Controls.Add(lblTitulo)
         y += 28
 
-        btnSeleccionarModelo = CrearBotonLateral("Seleccionar del modelo", y, System.Drawing.Color.FromArgb(0, 120, 80))
+        btnSeleccionarModelo = CrearBotonLateral("Seleccionar del modelo", y, System.Drawing.Color.FromArgb(16, 149, 102))
+        Dim tipSel As New ToolTip()
+        tipSel.SetToolTip(btnSeleccionarModelo, "Selección interactiva continua en el modelo 3D (Alternar / Marcar / Desmarcar).")
         AddHandler btnSeleccionarModelo.Click, AddressOf BtnSeleccionarModelo_Click
         panelBotones.Controls.Add(btnSeleccionarModelo)
-        y += 42
+        y += 40
 
-        btnHighlightCom = CrearBotonLateral("Resaltar COM", y, System.Drawing.Color.FromArgb(200, 0, 0))
+        btnDesmarcarModelo = CrearBotonLateral("Desmarcar del modelo", y, System.Drawing.Color.FromArgb(217, 83, 79))
+        Dim tipDesm As New ToolTip()
+        tipDesm.SetToolTip(btnDesmarcarModelo, "Haga clic en las piezas en el modelo 3D que desea desmarcar (quitar COM).")
+        AddHandler btnDesmarcarModelo.Click, AddressOf BtnDesmarcarModelo_Click
+        panelBotones.Controls.Add(btnDesmarcarModelo)
+        y += 40
+
+        btnHighlightCom = CrearBotonLateral("Resaltar COM en 3D", y, System.Drawing.Color.FromArgb(220, 38, 38))
+        Dim tipHl As New ToolTip()
+        tipHl.SetToolTip(btnHighlightCom, "Resalta en rojo todas las piezas comerciales en el modelo 3D.")
         AddHandler btnHighlightCom.Click, AddressOf BtnHighlightCom_Click
         panelBotones.Controls.Add(btnHighlightCom)
-        y += 50
+        y += 46
 
-        y += 10
         Dim sep1 As New Label()
         sep1.Location = New System.Drawing.Point(8, y)
-        sep1.Size = New System.Drawing.Size(134, 2)
-        sep1.BorderStyle = BorderStyle.Fixed3D
+        sep1.Size = New System.Drawing.Size(148, 1)
+        sep1.BackColor = System.Drawing.Color.FromArgb(226, 232, 240)
         panelBotones.Controls.Add(sep1)
-        y += 15
+        y += 10
 
         chkSoloConCambios = New CheckBox()
-        chkSoloConCambios.Text = "Solo cambios"
+        chkSoloConCambios.Text = "Solo con cambios"
         chkSoloConCambios.Location = New System.Drawing.Point(8, y)
-        chkSoloConCambios.Size = New System.Drawing.Size(134, 20)
-        chkSoloConCambios.Font = New Font("Segoe UI", 8)
+        chkSoloConCambios.Size = New System.Drawing.Size(148, 22)
+        chkSoloConCambios.Font = New Font("Segoe UI", 8.25F)
+        chkSoloConCambios.ForeColor = System.Drawing.Color.FromArgb(30, 41, 59)
         chkSoloConCambios.AutoSize = False
         AddHandler chkSoloConCambios.CheckedChanged, AddressOf ChkSoloConCambios_CheckedChanged
         panelBotones.Controls.Add(chkSoloConCambios)
-        y += 30
+        y += 28
 
-        btnRefrescar = CrearBotonLateral("Refrescar", y, System.Drawing.Color.FromArgb(100, 100, 100))
+        btnRefrescar = CrearBotonLateral("Refrescar", y, System.Drawing.Color.FromArgb(100, 116, 139))
+        Dim tipRef As New ToolTip()
+        tipRef.SetToolTip(btnRefrescar, "Recarga la estructura completa leyendo las iProperties reales de los archivos.")
         AddHandler btnRefrescar.Click, AddressOf BtnRefrescar_Click
         panelBotones.Controls.Add(btnRefrescar)
-        y += 50
+        y += 44
 
-        y += 10
         Dim sep2 As New Label()
         sep2.Location = New System.Drawing.Point(8, y)
-        sep2.Size = New System.Drawing.Size(134, 2)
-        sep2.BorderStyle = BorderStyle.Fixed3D
+        sep2.Size = New System.Drawing.Size(148, 1)
+        sep2.BackColor = System.Drawing.Color.FromArgb(226, 232, 240)
         panelBotones.Controls.Add(sep2)
-        y += 15
+        y += 10
 
-        btnAplicar = CrearBotonLateral("Aplicar cambios", y, System.Drawing.Color.FromArgb(0, 120, 212))
+        btnAplicar = CrearBotonLateral("Aplicar cambios", y, System.Drawing.Color.FromArgb(2, 132, 199))
+        Dim tipAp As New ToolTip()
+        tipAp.SetToolTip(btnAplicar, "Escribe la propiedad COM en todos los archivos modificados y actualiza el ensamble.")
         AddHandler btnAplicar.Click, AddressOf BtnAplicar_Click
         panelBotones.Controls.Add(btnAplicar)
-        y += 42
+        y += 40
 
-        btnCancelar = CrearBotonLateral("Cancelar", y, System.Drawing.Color.FromArgb(120, 120, 120))
+        btnCancelar = CrearBotonLateral("Cancelar", y, System.Drawing.Color.FromArgb(100, 116, 139))
         AddHandler btnCancelar.Click, AddressOf BtnCancelar_Click
         panelBotones.Controls.Add(btnCancelar)
-        y += 42
+        y += 44
 
-        y += 15
         Dim sep3 As New Label()
         sep3.Location = New System.Drawing.Point(8, y)
-        sep3.Size = New System.Drawing.Size(134, 2)
-        sep3.BorderStyle = BorderStyle.Fixed3D
+        sep3.Size = New System.Drawing.Size(148, 1)
+        sep3.BackColor = System.Drawing.Color.FromArgb(226, 232, 240)
         panelBotones.Controls.Add(sep3)
-        y += 12
+        y += 10
 
         lblResumen = New Label()
         lblResumen.Text = "Listo"
         lblResumen.Location = New System.Drawing.Point(8, y)
-        lblResumen.Size = New System.Drawing.Size(134, 80)
-        lblResumen.Font = New Font("Segoe UI", 8)
-        lblResumen.ForeColor = System.Drawing.Color.DimGray
+        lblResumen.Size = New System.Drawing.Size(148, 90)
+        lblResumen.Font = New Font("Segoe UI", 8.25F)
+        lblResumen.ForeColor = System.Drawing.Color.FromArgb(71, 85, 105)
         lblResumen.AutoSize = False
         panelBotones.Controls.Add(lblResumen)
 
@@ -208,13 +326,14 @@ Public Class ComercialAssignmentDialog
         Dim btn As New Button()
         btn.Text = texto
         btn.Location = New System.Drawing.Point(8, y)
-        btn.Size = New System.Drawing.Size(134, 36)
+        btn.Size = New System.Drawing.Size(148, 34)
         btn.BackColor = colorFondo
         btn.ForeColor = System.Drawing.Color.White
         btn.FlatStyle = FlatStyle.Flat
         btn.FlatAppearance.BorderSize = 0
-        btn.Font = New Font("Segoe UI", 8.5, FontStyle.Bold)
+        btn.Font = New Font("Segoe UI", 8.5F, FontStyle.Bold)
         btn.TextAlign = ContentAlignment.MiddleCenter
+        btn.Cursor = Cursors.Hand
         Return btn
     End Function
 
@@ -688,162 +807,223 @@ Public Class ComercialAssignmentDialog
     End Sub
 
     ' =========================================================
-    ' SELECCION MODELO CON COMMANDPICKER NATIVO (INTERACTIONEVENTS)
+    ' SELECCION EN MODELO 3D (INTERACTIVA, CONTINUA Y CON DESMARCAR)
     ' =========================================================
     Private Sub BtnSeleccionarModelo_Click(sender As Object, e As EventArgs)
+        IniciarSeleccionEnModelo(ModoAccionModelo.Alternar)
+    End Sub
+
+    Private Sub BtnDesmarcarModelo_Click(sender As Object, e As EventArgs)
+        IniciarSeleccionEnModelo(ModoAccionModelo.Desmarcar)
+    End Sub
+
+    Private Sub IniciarSeleccionEnModelo(modoInicial As ModoAccionModelo)
         Try
             Dim doc As Document = _app.ActiveDocument
             If doc Is Nothing OrElse doc.DocumentType <> DocumentTypeEnum.kAssemblyDocumentObject Then
-                MessageBox.Show("No hay un ensamblaje activo", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                MessageBox.Show(Me, "No hay un ensamblaje activo (.iam)", "Atención", MessageBoxButtons.OK, MessageBoxIcon.Warning)
                 Return
             End If
 
             doc.SelectSet.Clear()
-            Me.Hide() ' Ocultamos este diálogo para interactuar con Inventor
+            Me.Hide() ' Ocultar temporalmente para interactuar con Inventor
 
-            ' Inicializamos el asistente nativo de picking
-            Dim helper As New SeleccionModeloHelper(_app, AddressOf OnSeleccionModeloCompletada)
+            ' Inicializar el asistente interactivo continuo
+            Dim helper As New SeleccionModeloHelper(_app, Me, modoInicial)
             helper.IniciarSeleccion()
 
         Catch ex As Exception
             Me.Show()
             Me.Activate()
-            MessageBox.Show("Error al iniciar selección nativa: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            HabilitarVentanaInventor()
+            MessageBox.Show(Me, "Error al iniciar selección en modelo: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 
     ''' <summary>
-    ''' FLUJO AUTOMATIZADO: Al aceptar la selección, marca, aplica, refresca y resalta automáticamente.
+    ''' Notificación llamada cuando el usuario presiona ESC o Finalizar en la barra flotante.
+    ''' Restaura el diálogo principal y refresca las marcas y números en pantalla.
     ''' </summary>
-    Private Sub OnSeleccionModeloCompletada(occ As ComponentOccurrence, cancelado As Boolean)
+    Public Sub OnSeleccionModeloFinalizada()
         Me.Show()
         Me.Activate()
         Me.WindowState = FormWindowState.Normal
+        HabilitarVentanaInventor()
 
-        If cancelado OrElse occ Is Nothing Then Return
-
-        Try
-            Dim doc As Document = _app.ActiveDocument
-            doc.SelectSet.Clear()
-
-            Dim esIAM As Boolean = (occ.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject)
-            Dim modoRecursivo As Boolean = False
-
-            If esIAM Then
-                Dim respuesta As DialogResult = MessageBox.Show(
-                    "Seleccionó el sub-ensamblaje: " & occ.Name & vbCrLf & vbCrLf &
-                    "¿Desea marcar COM recursivamente a todos sus componentes internos?" & vbCrLf &
-                    "• Sí = Todo el contenido interno heredará la marca." & vbCrLf &
-                    "• No = Solo el contenedor .iam se marcará.",
-                    "Modo de selección .IAM",
-                    MessageBoxButtons.YesNoCancel,
-                    MessageBoxIcon.Question)
-
-                If respuesta = DialogResult.Cancel Then Return
-                modoRecursivo = (respuesta = DialogResult.Yes)
-            End If
-
-            ' 1. Buscar y simular la marca en nuestra lista en memoria
-            Dim nodoEncontrado As TreeNode = BuscarNodoPorOccurrence(tvArbol.Nodes, occ)
-            If nodoEncontrado IsNot Nothing Then
-                If modoRecursivo Then
-                    MarcarComRecursivo(nodoEncontrado, True)
-                Else
-                    ProcesarNodoComRecursivo(nodoEncontrado, False)
-                End If
-            Else
-                ProcesarOcurrenciaComRecursivo(occ, modoRecursivo)
-            End If
-
-            ' 2. AUTOMATIZACIÓN TRIPLE: Aplicar cambios inmediatamente sin preguntar
-            Dim cambios = _treeData.Where(Function(n) n.TieneCambio AndAlso Not n.IsBroken AndAlso Not n.IsBuloneria).ToList()
-            If cambios.Count > 0 Then
-                Dim engine As New ComercialAssignmentEngine(_app)
-                Dim result = engine.ExecuteWithChanges(cambios)
-
-                If result.Success Then
-                    ' Sincronizar estados
-                    For Each nodo In cambios
-                        nodo.ComActual = nodo.ComNuevo
-                        nodo.TieneCambio = False
-                    Next
-                End If
-            End If
-
-            ' 3. Refrescar la UI leyendo el modelo real
-            CargarDatos()
-
-            ' 4. Volver a encender el Resaltado de todo lo que tenga COM activo
-            ClearHighlight()
-            HighlightByComValue()
-
-        Catch ex As Exception
-            MessageBox.Show("Error en procesamiento automático: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End Try
+        RecalcularTodosLosEstados()
+        ActualizarPreview()
     End Sub
 
-    Private Function BuscarNodoPorOccurrence(nodes As TreeNodeCollection, occ As ComponentOccurrence) As TreeNode
-        For Each node As TreeNode In nodes
-            If node.Tag IsNot Nothing Then
-                Dim datos As NodoComercial = CType(node.Tag, NodoComercial)
-                If datos.Occurrence Is occ Then Return node
-            End If
-            If node.Nodes.Count > 0 Then
-                Dim found As TreeNode = BuscarNodoPorOccurrence(node.Nodes, occ)
-                If found IsNot Nothing Then Return found
-            End If
-        Next
-        Return Nothing
-    End Function
+    ''' <summary>
+    ''' Procesa en tiempo real el click del usuario sobre cualquier pieza o sub-ensamblaje del 3D.
+    ''' Permite Marcar (+), Desmarcar (-) o Alternar (Toggle), sincronizando todas las instancias de la familia.
+    ''' </summary>
+    Public Function ProcesarClickModeloEnVivo(occ As ComponentOccurrence, modo As ModoAccionModelo, recursivo As Boolean) As ResultadoClickModelo
+        Dim res As New ResultadoClickModelo()
+        If occ Is Nothing Then Return res
 
-    Private Sub ProcesarNodoComRecursivo(nodo As TreeNode, recursivo As Boolean)
-        If nodo Is Nothing Then Return
-        If nodo.Tag IsNot Nothing Then
-            Dim datos As NodoComercial = CType(nodo.Tag, NodoComercial)
-            If Not datos.IsContentCenter AndAlso Not datos.IsBuloneria AndAlso Not datos.IsBroken Then
-                If nodo.StateImageIndex <> 1 Then
-                    nodo.StateImageIndex = 1
-                    datos.ComNuevo = "✓"
-                    datos.TieneCambio = (datos.ComActual <> datos.ComNuevo)
-                    If datos.Occurrence IsNot Nothing Then
-                        SyncHighlightWithCheckbox(datos.Occurrence, True)
-                    End If
-                End If
+        Try
+            If occ.Definition Is Nothing OrElse occ.Definition.Document Is Nothing Then
+                res.Mensaje = "Componente sin documento o roto"
+                Return res
             End If
-        End If
 
-        If recursivo Then
-            For Each hijo As TreeNode In nodo.Nodes
-                ProcesarNodoComRecursivo(hijo, True)
+            Dim doc As Document = occ.Definition.Document
+            Dim key As String = doc.FullDocumentName
+            Dim shortName As String = System.IO.Path.GetFileName(key)
+
+            If EsBuloneria(doc) Then
+                res.Mensaje = "Bulonería omitida: " & shortName
+                Return res
+            End If
+
+            ' Buscar todos los nodos en memoria que correspondan a este archivo
+            Dim matchingNodes As List(Of NodoComercial) = _treeData.Where(Function(n) String.Equals(n.FileName, key, StringComparison.OrdinalIgnoreCase)).ToList()
+            If matchingNodes.Count = 0 Then
+                Dim nuevoDato As NodoComercial = ExtraerDatos(occ)
+                _treeData.Add(nuevoDato)
+                matchingNodes.Add(nuevoDato)
+            End If
+
+            ' Determinar si marcamos o desmarcamos
+            Dim marcar As Boolean
+            Select Case modo
+                Case ModoAccionModelo.Marcar
+                    marcar = True
+                Case ModoAccionModelo.Desmarcar
+                    marcar = False
+                Case Else ' Alternar
+                    Dim estadoActual As Boolean = (matchingNodes(0).ComNuevo = "✓")
+                    marcar = Not estadoActual
+            End Select
+
+            ' Actualizar todos los datos en memoria para todas las ocurrencias del mismo archivo
+            For Each n In matchingNodes
+                n.ComNuevo = If(marcar, "✓", "")
+                n.TieneCambio = (n.ComActual <> n.ComNuevo)
             Next
-        End If
-        RecalcularEstadoHaciaArriba(nodo)
-    End Sub
 
-    Private Sub ProcesarOcurrenciaComRecursivo(occ As ComponentOccurrence, recursivo As Boolean)
-        If occ Is Nothing Then Return
-        Try
-            If occ.Definition IsNot Nothing AndAlso occ.Definition.Document IsNot Nothing Then
-                Dim esBuloneriaValor As Boolean = EsBuloneria(occ.Definition.Document)
-                Dim esCC As Boolean = (occ.DefinitionDocumentType = DocumentTypeEnum.kPartDocumentObject AndAlso occ.Definition.IsContentMember)
-                If Not esBuloneriaValor AndAlso Not esCC Then
-                    Dim fileName As String = occ.Definition.Document.FullDocumentName
-                    Dim datos As NodoComercial = _treeData.FirstOrDefault(Function(n) n.FileName.Equals(fileName, StringComparison.OrdinalIgnoreCase))
-                    If datos IsNot Nothing Then
-                        datos.ComNuevo = "✓"
-                        datos.TieneCambio = (datos.ComActual <> datos.ComNuevo)
-                    End If
-                    SyncHighlightWithCheckbox(occ, True)
+            ' Actualizar visualmente los nodos del TreeView
+            ActualizarNodosEnTreePorArchivo(key, marcar)
+
+            ' Actualizar HighlightSet en el visor 3D para toda la familia
+            Dim hs As HighlightSet = GetOrCreateHighlightSet()
+            If hs IsNot Nothing Then
+                Dim asmDoc As AssemblyDocument = TryCast(_app.ActiveDocument, AssemblyDocument)
+                If asmDoc IsNot Nothing Then
+                    RecorrerToggleHighlight(asmDoc.ComponentDefinition.Occurrences, key, hs, quitar:=(Not marcar))
+                    _app.ActiveView.Update()
                 End If
             End If
 
+            ' Si es recursivo y es ensamblaje, propagar a sub-ocurrencias
             If recursivo AndAlso occ.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
                 For Each subOcc As ComponentOccurrence In occ.SubOccurrences
-                    ProcesarOcurrenciaComRecursivo(subOcc, True)
+                    ProcesarClickModeloEnVivo(subOcc, If(marcar, ModoAccionModelo.Marcar, ModoAccionModelo.Desmarcar), True)
                 Next
             End If
-        Catch
+
+            RecalcularTodosLosEstados()
+            ActualizarPreview()
+
+            res.CantidadAfectada = matchingNodes.Count
+            res.EsMarcado = marcar
+            res.Mensaje = String.Format("{0}: {1} ({2} inst.)", If(marcar, "✓ Marcado COM", "✕ Desmarcado (Sin COM)"), shortName, matchingNodes.Count)
+
+        Catch ex As Exception
+            res.Mensaje = "Error: " & ex.Message
         End Try
+
+        Return res
+    End Function
+
+    Private Sub ActualizarNodosEnTreePorArchivo(key As String, marcar As Boolean)
+        RecorrerTreeActualizarNodo(tvArbol.Nodes, key, marcar)
+    End Sub
+
+    Private Sub RecorrerTreeActualizarNodo(nodes As TreeNodeCollection, key As String, marcar As Boolean)
+        For Each node As TreeNode In nodes
+            Dim datos As NodoComercial = TryCast(node.Tag, NodoComercial)
+            If datos IsNot Nothing AndAlso String.Equals(datos.FileName, key, StringComparison.OrdinalIgnoreCase) Then
+                node.StateImageIndex = If(marcar, 1, 0)
+            End If
+            If node.Nodes.Count > 0 Then
+                RecorrerTreeActualizarNodo(node.Nodes, key, marcar)
+            End If
+        Next
+    End Sub
+
+    Private Sub RecalcularTodosLosEstados()
+        For Each rootNode As TreeNode In tvArbol.Nodes
+            CalcularEstadoRecursivoReal(rootNode)
+        Next
+    End Sub
+
+    Private Sub MarcarTodosLosVisibles(marcar As Boolean)
+        For Each n In _treeData
+            If Not n.IsBuloneria AndAlso Not n.IsBroken AndAlso Not n.IsContentCenter Then
+                n.ComNuevo = If(marcar, "✓", "")
+                n.TieneCambio = (n.ComActual <> n.ComNuevo)
+            End If
+        Next
+
+        For Each root As TreeNode In tvArbol.Nodes
+            MarcarComRecursivo(root, marcar)
+        Next
+
+        RecalcularTodosLosEstados()
+        ActualizarPreview()
+        ClearHighlight()
+        HighlightByComValue()
+    End Sub
+
+    ' =========================================================
+    ' BUSQUEDA Y FILTRADO RAPIDO EN EL ARBOL
+    ' =========================================================
+    Private Sub TxtBuscar_TextChanged(sender As Object, e As EventArgs)
+        Dim filtro As String = If(txtBuscar IsNot Nothing, txtBuscar.Text.Trim().ToLowerInvariant(), "")
+        If String.IsNullOrEmpty(filtro) Then
+            For Each n As TreeNode In tvArbol.Nodes
+                RestaurarColorNodo(n)
+            Next
+            Return
+        End If
+
+        tvArbol.BeginUpdate()
+        For Each root As TreeNode In tvArbol.Nodes
+            FiltrarNodosPorTexto(root, filtro)
+        Next
+        tvArbol.EndUpdate()
+    End Sub
+
+    Private Function FiltrarNodosPorTexto(nodo As TreeNode, filtro As String) As Boolean
+        Dim coincide As Boolean = nodo.Text.ToLowerInvariant().Contains(filtro)
+        Dim algunHijoCoincide As Boolean = False
+
+        For Each hijo As TreeNode In nodo.Nodes
+            If FiltrarNodosPorTexto(hijo, filtro) Then
+                algunHijoCoincide = True
+            End If
+        Next
+
+        If coincide OrElse algunHijoCoincide Then
+            nodo.BackColor = If(coincide, System.Drawing.Color.FromArgb(254, 240, 138), System.Drawing.Color.White)
+            nodo.ForeColor = System.Drawing.Color.Black
+            If algunHijoCoincide Then nodo.Expand()
+            Return True
+        Else
+            nodo.BackColor = System.Drawing.Color.White
+            nodo.ForeColor = System.Drawing.Color.FromArgb(160, 160, 160)
+            Return False
+        End If
+    End Function
+
+    Private Sub RestaurarColorNodo(nodo As TreeNode)
+        nodo.BackColor = System.Drawing.Color.White
+        nodo.ForeColor = System.Drawing.Color.Black
+        For Each hijo As TreeNode In nodo.Nodes
+            RestaurarColorNodo(hijo)
+        Next
     End Sub
 
     ' =========================================================
@@ -1087,179 +1267,280 @@ Public Class NodoComercial
 End Class
 
 ' =========================================================
-' HELPER DE SELECCIÓN EN MODELO (DIÁLOGO FLOTANTE CON COMMANDPICKER)
+' ENUMS Y CLASES DE APOYO PARA SELECCIÓN EN MODELO
+' =========================================================
+Public Enum ModoAccionModelo
+    Alternar = 0
+    Marcar = 1
+    Desmarcar = 2
+End Enum
+
+Public Class ResultadoClickModelo
+    Public Property Mensaje As String = ""
+    Public Property CantidadAfectada As Integer = 0
+    Public Property EsMarcado As Boolean = False
+End Class
+
+' =========================================================
+' HELPER DE SELECCIÓN EN MODELO (BARRA FLOTANTE INTERACTIVA Y CONTINUA)
 ' =========================================================
 Public Class SeleccionModeloHelper
     Inherits Form
 
-    Private _app As Inventor.Application
-    Private _callback As Action(Of ComponentOccurrence, Boolean)
+    Private ReadOnly _app As Inventor.Application
+    Private ReadOnly _parentDialog As ComercialAssignmentDialog
+    Private ReadOnly _modoInicial As ModoAccionModelo
+    Private _conteoModificados As Integer = 0
 
     ' Eventos nativos de Inventor
     Private WithEvents _interactionEvents As InteractionEvents
     Private WithEvents _selectEvents As SelectEvents
 
     ' Controles del Diálogo
+    Private rbAlternar As RadioButton
+    Private rbMarcar As RadioButton
+    Private rbDesmarcar As RadioButton
     Private rbPieza As RadioButton
     Private rbEnsamblaje As RadioButton
-    Private btnAceptar As Button
-    Private btnCancelar As Button
-    Private lblInfo As Label
+    Private lblStatus As Label
+    Private lblContador As Label
+    Private btnFinalizar As Button
 
-    Private _occSeleccionada As ComponentOccurrence = Nothing
-
-    Public Sub New(app As Inventor.Application, callback As Action(Of ComponentOccurrence, Boolean))
+    Public Sub New(app As Inventor.Application, parentDialog As ComercialAssignmentDialog, Optional modoInicial As ModoAccionModelo = ModoAccionModelo.Alternar)
         _app = app
-        _callback = callback
+        _parentDialog = parentDialog
+        _modoInicial = modoInicial
 
         InitializeComponent()
     End Sub
 
     Private Sub InitializeComponent()
-        Me.Text = "Selección desde el Modelo"
-        Me.Size = New System.Drawing.Size(320, 190)
+        Me.Text = "🎯 Selección en Modelo 3D (Click continuo en piezas)"
+        Me.Size = New System.Drawing.Size(530, 205)
         Me.FormBorderStyle = FormBorderStyle.FixedToolWindow
         Me.TopMost = True
-        Me.StartPosition = FormStartPosition.CenterScreen
-        Me.ControlBox = False ' Evita que cierren con la X sin cancelar eventos
+        Me.StartPosition = FormStartPosition.Manual
 
-        lblInfo = New Label()
-        lblInfo.Text = "1. Elija qué tipo de componente desea buscar:"
-        lblInfo.Location = New System.Drawing.Point(12, 10)
-        lblInfo.Size = New System.Drawing.Size(280, 20)
-        lblInfo.Font = New Font("Segoe UI", 9, FontStyle.Bold)
-        Me.Controls.Add(lblInfo)
+        Dim screenArea As Rectangle = Screen.PrimaryScreen.WorkingArea
+        Me.Location = New System.Drawing.Point((screenArea.Width - 530) \ 2, 40)
+        Me.BackColor = System.Drawing.Color.FromArgb(248, 250, 252)
+        Me.Font = New Font("Segoe UI", 9.0F)
+        Me.ControlBox = True
 
-        ' Modo Pieza (.ipt)
-        rbPieza = New RadioButton()
-        rbPieza.Text = "Pieza individual (.ipt)"
-        rbPieza.Location = New System.Drawing.Point(25, 35)
-        rbPieza.Size = New System.Drawing.Size(200, 20)
-        rbPieza.Checked = True
+        ' Panel 1: Modo / Acción (Alternar, Marcar, Desmarcar)
+        Dim pnlModo As New Panel() With {
+            .Location = New System.Drawing.Point(12, 10),
+            .Size = New System.Drawing.Size(490, 34),
+            .BackColor = System.Drawing.Color.FromArgb(241, 245, 249),
+            .BorderStyle = BorderStyle.FixedSingle
+        }
+        Dim lblModo As New Label() With {
+            .Text = "Acción:",
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .ForeColor = System.Drawing.Color.FromArgb(30, 41, 59),
+            .Location = New System.Drawing.Point(8, 7),
+            .AutoSize = True
+        }
+        pnlModo.Controls.Add(lblModo)
+
+        rbAlternar = New RadioButton() With {
+            .Text = "⇄ Alternar (Toggle)",
+            .Location = New System.Drawing.Point(68, 5),
+            .Size = New System.Drawing.Size(135, 22),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .ForeColor = System.Drawing.Color.FromArgb(2, 132, 199),
+            .Checked = (_modoInicial = ModoAccionModelo.Alternar),
+            .Cursor = Cursors.Hand
+        }
+        pnlModo.Controls.Add(rbAlternar)
+
+        rbMarcar = New RadioButton() With {
+            .Text = "✓ Marcar (+)",
+            .Location = New System.Drawing.Point(212, 5),
+            .Size = New System.Drawing.Size(115, 22),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .ForeColor = System.Drawing.Color.FromArgb(16, 149, 102),
+            .Checked = (_modoInicial = ModoAccionModelo.Marcar),
+            .Cursor = Cursors.Hand
+        }
+        pnlModo.Controls.Add(rbMarcar)
+
+        rbDesmarcar = New RadioButton() With {
+            .Text = "✕ Desmarcar (-)",
+            .Location = New System.Drawing.Point(335, 5),
+            .Size = New System.Drawing.Size(140, 22),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .ForeColor = System.Drawing.Color.FromArgb(220, 38, 38),
+            .Checked = (_modoInicial = ModoAccionModelo.Desmarcar),
+            .Cursor = Cursors.Hand
+        }
+        pnlModo.Controls.Add(rbDesmarcar)
+        Me.Controls.Add(pnlModo)
+
+        ' Panel 2: Filtro de selección (Pieza vs Ensamblaje)
+        Dim pnlFiltro As New Panel() With {
+            .Location = New System.Drawing.Point(12, 48),
+            .Size = New System.Drawing.Size(490, 28)
+        }
+        Dim lblFiltro As New Label() With {
+            .Text = "Filtro:",
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .ForeColor = System.Drawing.Color.FromArgb(71, 85, 105),
+            .Location = New System.Drawing.Point(8, 5),
+            .AutoSize = True
+        }
+        pnlFiltro.Controls.Add(lblFiltro)
+
+        rbPieza = New RadioButton() With {
+            .Text = "Pieza individual (.ipt)",
+            .Location = New System.Drawing.Point(68, 3),
+            .Size = New System.Drawing.Size(160, 20),
+            .Font = New Font("Segoe UI", 8.25F),
+            .Checked = True,
+            .Cursor = Cursors.Hand
+        }
         AddHandler rbPieza.CheckedChanged, AddressOf OnFiltroChanged
-        Me.Controls.Add(rbPieza)
+        pnlFiltro.Controls.Add(rbPieza)
 
-        ' Modo Ensamblaje (.iam)
-        rbEnsamblaje = New RadioButton()
-        rbEnsamblaje.Text = "Sub-ensamblaje contenedor (.iam)"
-        rbEnsamblaje.Location = New System.Drawing.Point(25, 58)
-        rbEnsamblaje.Size = New System.Drawing.Size(250, 20)
+        rbEnsamblaje = New RadioButton() With {
+            .Text = "Sub-ensamblaje (.iam)",
+            .Location = New System.Drawing.Point(235, 3),
+            .Size = New System.Drawing.Size(180, 20),
+            .Font = New Font("Segoe UI", 8.25F),
+            .Cursor = Cursors.Hand
+        }
         AddHandler rbEnsamblaje.CheckedChanged, AddressOf OnFiltroChanged
-        Me.Controls.Add(rbEnsamblaje)
+        pnlFiltro.Controls.Add(rbEnsamblaje)
+        Me.Controls.Add(pnlFiltro)
 
-        ' Botón Aceptar
-        btnAceptar = New Button()
-        btnAceptar.Text = "Aceptar"
-        btnAceptar.Location = New System.Drawing.Point(40, 105)
-        btnAceptar.Size = New System.Drawing.Size(110, 32)
-        btnAceptar.BackColor = System.Drawing.Color.FromArgb(0, 120, 80)
-        btnAceptar.ForeColor = System.Drawing.Color.White
-        btnAceptar.FlatStyle = FlatStyle.Flat
-        btnAceptar.FlatAppearance.BorderSize = 0
-        btnAceptar.Font = New Font("Segoe UI", 9, FontStyle.Bold)
-        AddHandler btnAceptar.Click, AddressOf BtnAceptar_Click
-        Me.Controls.Add(btnAceptar)
+        ' Panel 3: Feedback en vivo y Contador
+        lblStatus = New Label() With {
+            .Text = "Haga click en las piezas en el visor 3D para aplicar la acción elegida. Presione ESC para finalizar.",
+            .Location = New System.Drawing.Point(15, 82),
+            .Size = New System.Drawing.Size(485, 30),
+            .Font = New Font("Segoe UI", 8.25F, FontStyle.Italic),
+            .ForeColor = System.Drawing.Color.FromArgb(51, 65, 85)
+        }
+        Me.Controls.Add(lblStatus)
 
-        ' Botón Cancelar
-        btnCancelar = New Button()
-        btnCancelar.Text = "Cancelar"
-        btnCancelar.Location = New System.Drawing.Point(160, 105)
-        btnCancelar.Size = New System.Drawing.Size(110, 32)
-        btnCancelar.BackColor = System.Drawing.Color.FromArgb(120, 120, 120)
-        btnCancelar.ForeColor = System.Drawing.Color.White
-        btnCancelar.FlatStyle = FlatStyle.Flat
-        btnCancelar.FlatAppearance.BorderSize = 0
-        btnCancelar.Font = New Font("Segoe UI", 9, FontStyle.Bold)
-        AddHandler btnCancelar.Click, AddressOf BtnCancelar_Click
-        Me.Controls.Add(btnCancelar)
+        lblContador = New Label() With {
+            .Text = "Piezas modificadas en esta sesión: 0",
+            .Location = New System.Drawing.Point(15, 122),
+            .Size = New System.Drawing.Size(265, 24),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .ForeColor = System.Drawing.Color.FromArgb(15, 23, 42)
+        }
+        Me.Controls.Add(lblContador)
+
+        btnFinalizar = New Button() With {
+            .Text = "✓ Finalizar Selección (ESC)",
+            .Location = New System.Drawing.Point(285, 118),
+            .Size = New System.Drawing.Size(217, 34),
+            .BackColor = System.Drawing.Color.FromArgb(2, 132, 199),
+            .ForeColor = System.Drawing.Color.White,
+            .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnFinalizar.FlatAppearance.BorderSize = 0
+        AddHandler btnFinalizar.Click, Sub() CerrarTodo()
+        Me.Controls.Add(btnFinalizar)
+
+        Me.AcceptButton = btnFinalizar
+        Me.CancelButton = btnFinalizar
     End Sub
 
     ''' <summary>
-    ''' Arranca el entorno interactivo en Inventor al mostrar el formulario.
+    ''' Arranca el entorno interactivo en Inventor habilitando clicks continuos en el modelo 3D.
     ''' </summary>
     Public Sub IniciarSeleccion()
         Try
             _interactionEvents = _app.CommandManager.CreateInteractionEvents()
-            _interactionEvents.StatusBarText = "Haga click en el componente del modelo 3D según el filtro seleccionado."
+            _interactionEvents.StatusBarText = "Haga click en las piezas en el modelo 3D para marcar o desmarcar. Presione ESC para finalizar."
 
             _selectEvents = _interactionEvents.SelectEvents
-            _selectEvents.SingleSelectEnabled = True
+            _selectEvents.SingleSelectEnabled = False ' Mantiene la selección activa para hacer múltiples clicks sucesivos
 
-            ' Configurar filtro inicial
             ActualizarFiltroDeSeleccion()
 
             _interactionEvents.Start()
             Me.Show()
+            _parentDialog.HabilitarVentanaInventor()
         Catch ex As Exception
             MessageBox.Show("Error al iniciar los eventos de selección: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-            CerrarTodo(Nothing, True)
+            CerrarTodo()
         End Try
     End Sub
 
-    ''' <summary>
-    ''' Cambia dinámicamente el comportamiento del cursor de Inventor sin romper el comando
-    ''' </summary>
     Private Sub OnFiltroChanged(sender As Object, e As EventArgs)
         If _selectEvents Is Nothing Then Return
         ActualizarFiltroDeSeleccion()
     End Sub
 
     Private Sub ActualizarFiltroDeSeleccion()
+        If _selectEvents Is Nothing Then Return
         _selectEvents.ClearSelectionFilter()
 
         If rbPieza.Checked Then
-            ' kPartAppearanceFilter / LeafObect fuerza a buscar la pieza de nivel más bajo (.ipt)
             _selectEvents.AddSelectionFilter(SelectionFilterEnum.kPartFeatureFilter)
             _selectEvents.AddSelectionFilter(SelectionFilterEnum.kAssemblyLeafOccurrenceFilter)
         Else
-            ' kAssemblyOccurrenceFilter permite agarrar sub-ensamblajes de niveles superiores (.iam)
             _selectEvents.AddSelectionFilter(SelectionFilterEnum.kAssemblyOccurrenceFilter)
         End If
     End Sub
 
+    Private Function ObtenerModoActual() As ModoAccionModelo
+        If rbDesmarcar.Checked Then Return ModoAccionModelo.Desmarcar
+        If rbMarcar.Checked Then Return ModoAccionModelo.Marcar
+        Return ModoAccionModelo.Alternar
+    End Function
+
     ''' <summary>
-    ''' Evento nativo de click en el 3D de Inventor
+    ''' Evento nativo de click en el 3D de Inventor.
+    ''' Procesa inmediatamente el componente sin cerrar el diálogo ni bloquear la vista.
     ''' </summary>
     Private Sub _selectEvents_OnSelect(ByVal JustSelectedEntities As ObjectsEnumerator, ByVal SelectionDevice As SelectionDeviceEnum, ByVal ModelPosition As Inventor.Point, ByVal ViewPosition As Point2d, ByVal View As Inventor.View) Handles _selectEvents.OnSelect
         Try
             If JustSelectedEntities IsNot Nothing AndAlso JustSelectedEntities.Count > 0 Then
                 Dim obj As Object = JustSelectedEntities.Item(1)
+                Dim occ As ComponentOccurrence = Nothing
 
-                ' Si es una cara/arista de pieza, escalamos hasta su ocurrencia
                 If TypeOf obj Is ComponentOccurrence Then
-                    _occSeleccionada = CType(obj, ComponentOccurrence)
+                    occ = CType(obj, ComponentOccurrence)
                 Else
-                    ' Intentar obtener el objeto contenedor mediante la propiedad de la API si aplica
                     Try
-                        _occSeleccionada = obj.ContainingOccurrence
+                        occ = obj.ContainingOccurrence
                     Catch
-                        _occSeleccionada = Nothing
                     End Try
                 End If
+
+                If occ IsNot Nothing Then
+                    Dim modo As ModoAccionModelo = ObtenerModoActual()
+                    Dim recursivo As Boolean = rbEnsamblaje.Checked
+                    Dim res = _parentDialog.ProcesarClickModeloEnVivo(occ, modo, recursivo)
+
+                    lblStatus.Text = res.Mensaje
+                    If res.CantidadAfectada > 0 Then
+                        _conteoModificados += res.CantidadAfectada
+                        lblContador.Text = String.Format("Piezas modificadas en esta sesión: {0}", _conteoModificados)
+                    End If
+                End If
             End If
-        Catch
-            _occSeleccionada = Nothing
+        Catch ex As Exception
+        Finally
+            Try
+                Dim doc As Document = _app.ActiveDocument
+                If doc IsNot Nothing Then doc.SelectSet.Clear()
+            Catch
+            End Try
         End Try
     End Sub
 
-    Private Sub BtnAceptar_Click(sender As Object, e As EventArgs)
-        If _occSeleccionada Is Nothing Then
-            MessageBox.Show("Aún no ha hecho click en ningún componente del modelo válido.", "Atención", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-            Return
-        End If
-        CerrarTodo(_occSeleccionada, False)
-    End Sub
-
-    Private Sub BtnCancelar_Click(sender As Object, e As EventArgs)
-        CerrarTodo(Nothing, True)
-    End Sub
-
     Private Sub _interactionEvents_OnTerminate() Handles _interactionEvents.OnTerminate
-        ' Si el usuario presiona ESC en Inventor, actúa como Cancelar
-        btnCancelar.PerformClick()
+        CerrarTodo()
     End Sub
 
-    Private Sub CerrarTodo(occ As ComponentOccurrence, cancelado As Boolean)
+    Private Sub CerrarTodo()
         Try
             If _interactionEvents IsNot Nothing Then
                 _interactionEvents.Stop()
@@ -1269,7 +1550,7 @@ Public Class SeleccionModeloHelper
             _selectEvents = Nothing
             _interactionEvents = Nothing
             Me.Hide()
-            _callback(occ, cancelado)
+            _parentDialog.OnSeleccionModeloFinalizada()
             Me.Close()
         End Try
     End Sub
