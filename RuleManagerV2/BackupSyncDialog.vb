@@ -128,7 +128,7 @@ Public Class BackupSyncDialog
         }
 
         Dim lblSubtitle As New Label With {
-            .Text = "Vista en Árbol por Ramas: Las carpetas idénticas permanecen colapsadas. Las carpetas con diferencias se auto-despliegan al instante.",
+            .Text = "Vista en Árbol por Ramas: Las carpetas idénticas permanecen colapsadas. Las carpetas con diferencias se auto-despliegan. (Carpetas 'OldVersions' excluidas automáticamente).",
             .ForeColor = Color.FromArgb(148, 163, 184),
             .Font = New Font("Segoe UI", 8.5F),
             .AutoSize = True,
@@ -551,7 +551,7 @@ Public Class BackupSyncDialog
             _btnPull.Enabled = (countPull > 0)
             _btnPush.Enabled = (countPush > 0)
 
-            _lblResumen.Text = "⚡ " & _itemsComparados.Count.ToString() & " archivos analizados en " & segs.ToString("F2") & " seg | " & countPull.ToString() & " requieren PULL | " & countPush.ToString() & " requieren PUSH | " & countIdentical.ToString() & " idénticos"
+            _lblResumen.Text = "⚡ " & _itemsComparados.Count.ToString() & " archivos analizados en " & segs.ToString("F2") & " seg (carpetas 'OldVersions' excluidas) | " & countPull.ToString() & " requieren PULL | " & countPush.ToString() & " requieren PUSH | " & countIdentical.ToString() & " idénticos"
         Catch ex As Exception
             MessageBox.Show("Error al comparar archivos: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             _lblResumen.Text = "Error durante el escaneo."
@@ -593,6 +593,7 @@ Public Class BackupSyncDialog
     ''' 1. Colapsa automáticamente las ramas donde todos los archivos son idénticos.
     ''' 2. Auto-despliega las ramas con diferencias.
     ''' 3. Selecciona automáticamente el primer archivo con cambios para que el usuario vea de inmediato qué cambió.
+    ''' 4. Excluye de raíz cualquier carpeta o archivo dentro de 'OldVersions'.
     ''' </summary>
     Private Sub PoblarArbolJerarquico()
         _treeView.BeginUpdate()
@@ -605,6 +606,11 @@ Public Class BackupSyncDialog
         Dim primerNodoDiferente As TreeNode = Nothing
 
         For Each item In _itemsComparados
+            ' Filtro estricto: Descartar si pertenece a una carpeta OldVersions
+            If item.RelativePath.IndexOf("OldVersions", StringComparison.OrdinalIgnoreCase) >= 0 Then
+                Continue For
+            End If
+
             ' Filtro de solo diferencias si está activo
             If soloDiferencias AndAlso item.Status = FileSyncStatusEnum.Identical Then
                 Continue For
@@ -618,6 +624,9 @@ Public Class BackupSyncDialog
             ' Crear o navegar ramas de carpetas
             For i As Integer = 0 To parts.Length - 2
                 Dim folderName = parts(i)
+                If String.Equals(folderName, "OldVersions", StringComparison.OrdinalIgnoreCase) Then
+                    Exit For
+                End If
                 currentPathAccum = If(String.IsNullOrEmpty(currentPathAccum), folderName, currentPathAccum & "\" & folderName)
 
                 Dim folderNode As TreeNode = Nothing

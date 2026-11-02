@@ -143,15 +143,70 @@ Public Class LibraryBackupSyncManager
     End Function
 
     ''' <summary>
-    ''' Comprueba si un archivo o directorio debe ser excluido de la sincronización.
-    ''' Ignora carpetas de logs ("\Sync_Logs\", "\Logs\") y archivos de log temporales.
+    ''' Comprueba si una carpeta debe ser omitida completamente del escaneo, comparación y copia.
+    ''' Excluye de raíz 'OldVersions' (versiones automáticas de Autodesk Inventor) y carpetas de logs.
+    ''' </summary>
+    Public Shared Function EsCarpetaIgnorada(nombreCarpeta As String, Optional rutaCompleta As String = "") As Boolean
+        If String.IsNullOrWhiteSpace(nombreCarpeta) Then Return False
+
+        Dim nameTrim = nombreCarpeta.Trim()
+
+        ' Omitir estrictamente 'OldVersions' (en cualquier combinación de mayúsculas/minúsculas)
+        If String.Equals(nameTrim, "OldVersions", StringComparison.OrdinalIgnoreCase) Then
+            Return True
+        End If
+
+        ' Omitir carpetas de logs y backups temporales
+        If String.Equals(nameTrim, "Sync_Logs", StringComparison.OrdinalIgnoreCase) OrElse
+           String.Equals(nameTrim, "Logs", StringComparison.OrdinalIgnoreCase) OrElse
+           String.Equals(nameTrim, "Log", StringComparison.OrdinalIgnoreCase) Then
+            Return True
+        End If
+
+        If Not String.IsNullOrEmpty(rutaCompleta) Then
+            Dim rutaNorm = rutaCompleta.Replace("/"c, "\"c)
+            If rutaNorm.IndexOf("\OldVersions\", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+               rutaNorm.EndsWith("\OldVersions", StringComparison.OrdinalIgnoreCase) OrElse
+               rutaNorm.IndexOf("/OldVersions/", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+               rutaNorm.EndsWith("/OldVersions", StringComparison.OrdinalIgnoreCase) Then
+                Return True
+            End If
+        End If
+
+        Return False
+    End Function
+
+    ''' <summary>
+    ''' Comprueba si un archivo o directorio debe ser excluido de la sincronización y comparación.
+    ''' Excluye estrictamente cualquier archivo o carpeta ubicado dentro de 'OldVersions',
+    ''' carpetas de logs ("\Sync_Logs\", "\Logs\") y archivos de log temporales.
     ''' </summary>
     Public Shared Function EsArchivoIgnorado(rutaCompleta As String) As Boolean
         If String.IsNullOrWhiteSpace(rutaCompleta) Then Return True
 
         Dim rutaNorm = rutaCompleta.Replace("/"c, "\"c)
 
-        ' Ignorar carpetas de logs internas
+        ' 1. EXCLUSIÓN TOTAL DE CARPETAS 'OldVersions' (Autodesk Inventor version backup)
+        If rutaNorm.IndexOf("\OldVersions\", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+           rutaNorm.EndsWith("\OldVersions", StringComparison.OrdinalIgnoreCase) OrElse
+           rutaNorm.IndexOf("/OldVersions/", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+           rutaNorm.EndsWith("/OldVersions", StringComparison.OrdinalIgnoreCase) Then
+            Return True
+        End If
+
+        ' Verificación exhaustiva de cada segmento del directorio
+        Dim dirActual = Path.GetDirectoryName(rutaNorm)
+        While Not String.IsNullOrEmpty(dirActual)
+            Dim nombreDir = Path.GetFileName(dirActual)
+            If String.Equals(nombreDir, "OldVersions", StringComparison.OrdinalIgnoreCase) Then
+                Return True
+            End If
+            Dim padre = Path.GetDirectoryName(dirActual)
+            If padre = dirActual Then Exit While
+            dirActual = padre
+        End While
+
+        ' 2. Ignorar carpetas de logs internas
         If rutaNorm.IndexOf("\Sync_Logs\", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
            rutaNorm.IndexOf("\Logs\", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
            rutaNorm.IndexOf("\Log\", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
@@ -160,13 +215,13 @@ Public Class LibraryBackupSyncManager
             Return True
         End If
 
-        ' Ignorar extensiones de logs y archivos temporales
+        ' 3. Ignorar extensiones de logs y archivos temporales
         Dim ext = Path.GetExtension(rutaNorm).ToLowerInvariant()
         If ext = ".log" OrElse ext = ".tmp" OrElse ext = ".bak" OrElse ext = ".lck" OrElse ext = ".old" Then
             Return True
         End If
 
-        ' Ignorar nombres específicos de logs de sincronización
+        ' 4. Ignorar nombres específicos de logs de sincronización
         Dim nombreArchivo = Path.GetFileName(rutaNorm).ToLowerInvariant()
         If nombreArchivo.StartsWith("sync_log_") OrElse
            nombreArchivo = "changelog_general.txt" OrElse
@@ -189,7 +244,7 @@ Public Class LibraryBackupSyncManager
             Return resultados
         End If
 
-        progreso?.Report("Escaneando carpetas local y servidor en paralelo a alta velocidad...")
+        progreso?.Report("Escaneando carpetas local y servidor en paralelo a alta velocidad (omitiendo OldVersions)...")
 
         ' Escaneo concurrente de árbol local y árbol en red SMB (hilos independientes)
         Dim taskLocal = Task.Run(Function() EscanearDirectorioRapido(localRoot))
@@ -210,6 +265,11 @@ Public Class LibraryBackupSyncManager
         Dim itemsModificadosParaInspeccionar As New List(Of FileComparisonItem)
 
         For Each relPath In todasLasRutas
+            ' Seguridad adicional: Ignorar cualquier ruta relativa que haga referencia a OldVersions
+            If relPath.IndexOf("OldVersions", StringComparison.OrdinalIgnoreCase) >= 0 Then
+                Continue For
+            End If
+
             Dim item As New FileComparisonItem With {
                 .RelativePath = relPath,
                 .LocalFullPath = System.IO.Path.Combine(localRoot, relPath),
@@ -291,39 +351,65 @@ Public Class LibraryBackupSyncManager
                             Return a.RelativePath.CompareTo(b.RelativePath)
                         End Function)
 
-        progreso?.Report($"Comprobación finalizada. {resultados.Count} archivos procesados.")
+        progreso?.Report($"Comprobación finalizada. {resultados.Count} archivos procesados (carpetas 'OldVersions' excluidas).")
         Return resultados
     End Function
 
     ''' <summary>
-    ''' Escanea una carpeta completa utilizando DirectoryInfo.EnumerateFiles.
-    ''' Obtiene Size y LastWriteTime en paquetes masivos desde el SMB Cache de Windows.
+    ''' Escanea una carpeta completa evitando de raíz entrar a subdirectorios 'OldVersions'.
+    ''' Esto ahorra latencia en red SMB/LAN y evita comparar o copiar versiones obsoletas de Inventor.
     ''' </summary>
     Private Function EscanearDirectorioRapido(directorioRaiz As String) As Dictionary(Of String, FileQuickMeta)
         Dim dicc As New Dictionary(Of String, FileQuickMeta)(StringComparer.OrdinalIgnoreCase)
         If Not Directory.Exists(directorioRaiz) Then Return dicc
 
         Try
-            Dim dirInfo As New DirectoryInfo(directorioRaiz)
-            Dim opt As New EnumerationOptions With {
-                .RecurseSubdirectories = True,
-                .IgnoreInaccessible = True,
-                .ReturnSpecialDirectories = False
-            }
+            Dim carpetasPendientes As New Stack(Of String)()
+            carpetasPendientes.Push(directorioRaiz)
 
-            For Each fi In dirInfo.EnumerateFiles("*", opt)
-                If EsArchivoIgnorado(fi.FullName) Then Continue For
+            While carpetasPendientes.Count > 0
+                Dim dirActual = carpetasPendientes.Pop()
 
-                Dim relPath = GetRelativePath(directorioRaiz, fi.FullName)
-                Dim meta As New FileQuickMeta With {
-                    .RelativePath = relPath,
-                    .FullPath = fi.FullName,
-                    .Size = fi.Length,
-                    .LastWriteUtc = fi.LastWriteTimeUtc
-                }
+                ' 1. Explorar subcarpetas omitiendo estrictamente "OldVersions" y carpetas de logs
+                Try
+                    Dim subDirs = Directory.GetDirectories(dirActual)
+                    For Each subDir In subDirs
+                        Dim subName = Path.GetFileName(subDir)
+                        If Not EsCarpetaIgnorada(subName, subDir) Then
+                            carpetasPendientes.Push(subDir)
+                        End If
+                    Next
+                Catch
+                    ' Continuar si alguna carpeta específica no tiene permisos
+                End Try
 
-                dicc(relPath) = meta
-            Next
+                ' 2. Enumerate files in current directory only
+                Try
+                    Dim files = Directory.GetFiles(dirActual)
+                    For Each filePath In files
+                        If EsArchivoIgnorado(filePath) Then Continue For
+
+                        Dim fi As New FileInfo(filePath)
+                        Dim relPath = GetRelativePath(directorioRaiz, filePath)
+
+                        ' Doble verificación para descartar cualquier referencia a OldVersions
+                        If relPath.IndexOf("OldVersions", StringComparison.OrdinalIgnoreCase) >= 0 Then
+                            Continue For
+                        End If
+
+                        Dim meta As New FileQuickMeta With {
+                            .RelativePath = relPath,
+                            .FullPath = filePath,
+                            .Size = fi.Length,
+                            .LastWriteUtc = fi.LastWriteTimeUtc
+                        }
+
+                        dicc(relPath) = meta
+                    Next
+                Catch
+                    ' Continuar si algún archivo protegido no se puede leer
+                End Try
+            End While
         Catch ex As Exception
             System.Diagnostics.Debug.WriteLine($"Error al escanear directorio {directorioRaiz}: {ex.Message}")
         End Try
@@ -359,7 +445,7 @@ Public Class LibraryBackupSyncManager
     ''' utilizando transferencias concurrentes y búferes ampliados.
     ''' </summary>
     Public Function EjecutarPull(items As List(Of FileComparisonItem), localRoot As String, serverRoot As String, Optional progreso As IProgress(Of String) = Nothing) As Integer
-        Dim itemsParaBajar = items.FindAll(Function(x) x.Status = FileSyncStatusEnum.ServerNewer OrElse x.Status = FileSyncStatusEnum.OnlyOnServer)
+        Dim itemsParaBajar = items.FindAll(Function(x) (x.Status = FileSyncStatusEnum.ServerNewer OrElse x.Status = FileSyncStatusEnum.OnlyOnServer) AndAlso Not EsArchivoIgnorado(x.RelativePath))
         If itemsParaBajar.Count = 0 Then Return 0
 
         Dim actualizados As Integer = 0
@@ -368,7 +454,7 @@ Public Class LibraryBackupSyncManager
         logCambios.AppendLine("OPERACIÓN: PULL DE ALTA VELOCIDAD (Servidor -> Local)")
         logCambios.AppendLine($"Fecha/Hora: {DateTime.Now:yyyy-MM-dd HH:mm:ss}")
         logCambios.AppendLine($"Usuario local: {SysEnv.UserName} ({SysEnv.MachineName})")
-        logCambios.AppendLine($"Total a sincronizar: {itemsParaBajar.Count} archivos")
+        logCambios.AppendLine($"Total a sincronizar: {itemsParaBajar.Count} archivos (excluidas carpetas OldVersions)")
         logCambios.AppendLine("--------------------------------------------------------------------------------")
 
         Dim maxHilos = Math.Min(6, Math.Max(2, SysEnv.ProcessorCount))
@@ -379,6 +465,10 @@ Public Class LibraryBackupSyncManager
 
         Parallel.ForEach(itemsParaBajar, parOpts,
             Sub(item As FileComparisonItem)
+                If EsArchivoIgnorado(item.ServerFullPath) OrElse EsArchivoIgnorado(item.LocalFullPath) Then
+                    Exit Sub
+                End If
+
                 Try
                     CopiarArchivoStreamAltaVelocidad(item.ServerFullPath, item.LocalFullPath)
                     Threading.Interlocked.Increment(actualizados)
@@ -424,7 +514,7 @@ Public Class LibraryBackupSyncManager
     ''' utilizando transferencias concurrentes y búferes ampliados.
     ''' </summary>
     Public Function EjecutarPush(items As List(Of FileComparisonItem), localRoot As String, serverRoot As String, Optional progreso As IProgress(Of String) = Nothing) As Integer
-        Dim itemsParaSubir = items.FindAll(Function(x) x.Status = FileSyncStatusEnum.LocalNewer OrElse x.Status = FileSyncStatusEnum.OnlyOnLocal)
+        Dim itemsParaSubir = items.FindAll(Function(x) (x.Status = FileSyncStatusEnum.LocalNewer OrElse x.Status = FileSyncStatusEnum.OnlyOnLocal) AndAlso Not EsArchivoIgnorado(x.RelativePath))
         If itemsParaSubir.Count = 0 Then Return 0
 
         Dim subidos As Integer = 0
@@ -433,7 +523,7 @@ Public Class LibraryBackupSyncManager
         logCambios.AppendLine("OPERACIÓN: PUSH DE ALTA VELOCIDAD (Local -> Servidor)")
         logCambios.AppendLine($"Fecha/Hora: {DateTime.Now:yyyy-MM-dd HH:mm:ss}")
         logCambios.AppendLine($"Usuario autor: {SysEnv.UserName} ({SysEnv.MachineName})")
-        logCambios.AppendLine($"Total a subir: {itemsParaSubir.Count} archivos")
+        logCambios.AppendLine($"Total a subir: {itemsParaSubir.Count} archivos (excluidas carpetas OldVersions)")
         logCambios.AppendLine("--------------------------------------------------------------------------------")
 
         Dim maxHilos = Math.Min(6, Math.Max(2, SysEnv.ProcessorCount))
@@ -444,6 +534,10 @@ Public Class LibraryBackupSyncManager
 
         Parallel.ForEach(itemsParaSubir, parOpts,
             Sub(item As FileComparisonItem)
+                If EsArchivoIgnorado(item.LocalFullPath) OrElse EsArchivoIgnorado(item.ServerFullPath) Then
+                    Exit Sub
+                End If
+
                 Try
                     CopiarArchivoStreamAltaVelocidad(item.LocalFullPath, item.ServerFullPath)
                     Threading.Interlocked.Increment(subidos)

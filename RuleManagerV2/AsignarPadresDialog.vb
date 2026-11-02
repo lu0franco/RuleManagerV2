@@ -20,6 +20,7 @@ Imports TextBox = System.Windows.Forms.TextBox
 ''' </summary>
 Public Class ElementoPadreItem
     Public Property Occurrence As ComponentOccurrence
+    Public Property TargetBOMRow As BOMRow = Nothing     ' Referencia directa a la fila BOMRow en la Lista de Materiales (LDM) de Inventor
     Public Property Document As Document
     Public Property ModelStateName As String = ""       ' Nombre del Estado de Modelo (e.g. COSTILLA CAJON CENTRAL)
     Public Property DocumentPath As String = ""
@@ -183,8 +184,11 @@ Public Class AsignarPadresDialog
     Private treeEstructura As TreeView
     Private _grid As DataGridView
     Private pnlGridToolbar As Panel
+    Private lblGridHeader As Label
     Private btnSobreescribirAnteriores As Button
     Private btnAuditarHuecos As Button
+    Private btnCompactarHuecos As Button
+    Private _mostrarSoloHuecos As Boolean = False
     Private _sortColumn As Integer = -1
     Private _sortAscending As Boolean = True
 
@@ -963,6 +967,7 @@ Public Class AsignarPadresDialog
         AddHandler _grid.CellValueChanged, AddressOf Grid_CellValueChanged
         AddHandler _grid.CurrentCellDirtyStateChanged, AddressOf Grid_CurrentCellDirtyStateChanged
         AddHandler _grid.ColumnHeaderMouseClick, AddressOf Grid_ColumnHeaderMouseClick
+        AddHandler _grid.CellMouseDown, AddressOf Grid_CellMouseDown
 
         pnlGridToolbar = New Panel() With {
             .Dock = DockStyle.Top,
@@ -971,7 +976,7 @@ Public Class AsignarPadresDialog
             .Padding = New Padding(8, 4, 8, 4)
         }
 
-        Dim lblGridHeader As New Label() With {
+        lblGridHeader = New Label() With {
             .Text = "Componentes a procesar (Columna 'Inc.' define la selección para esta corrida):",
             .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
             .ForeColor = Color.FromArgb(51, 65, 85),
@@ -982,8 +987,8 @@ Public Class AsignarPadresDialog
 
         btnSobreescribirAnteriores = New Button() With {
             .Text = "Sobreescribir datos anteriores",
-            .Size = New Size(205, 26),
-            .Location = New Point(pnlGridToolbar.Width - 215, 5),
+            .Size = New Size(195, 26),
+            .Location = New Point(pnlGridToolbar.Width - 205, 5),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
             .BackColor = Color.White,
             .ForeColor = Color.FromArgb(67, 56, 202),
@@ -1000,7 +1005,7 @@ Public Class AsignarPadresDialog
         btnAuditarHuecos = New Button() With {
             .Text = "⚠️ Huecos en BOM",
             .Size = New Size(175, 26),
-            .Location = New Point(pnlGridToolbar.Width - 398, 5),
+            .Location = New Point(pnlGridToolbar.Width - 388, 5),
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
             .BackColor = Color.FromArgb(254, 243, 199),
             .ForeColor = Color.FromArgb(180, 83, 9),
@@ -1010,9 +1015,26 @@ Public Class AsignarPadresDialog
         }
         btnAuditarHuecos.FlatAppearance.BorderColor = Color.FromArgb(252, 211, 77)
         Dim tipHuecos As New ToolTip()
-        tipHuecos.SetToolTip(btnAuditarHuecos, "Detecta saltos en la columna de Elemento (BOM Estructurado) y permite asignar el número faltante a un componente existente.")
+        tipHuecos.SetToolTip(btnAuditarHuecos, "Alterna el filtro de la grilla para ver únicamente los componentes y subensamblajes con huecos en la secuencia de Elementos BOM.")
         AddHandler btnAuditarHuecos.Click, AddressOf BtnAuditarHuecos_Click
         pnlGridToolbar.Controls.Add(btnAuditarHuecos)
+
+        btnCompactarHuecos = New Button() With {
+            .Text = "⚡ Compactar Huecos",
+            .Size = New Size(160, 26),
+            .Location = New Point(pnlGridToolbar.Width - 556, 5),
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Right,
+            .BackColor = Color.FromArgb(240, 253, 244),
+            .ForeColor = Color.FromArgb(22, 101, 52),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnCompactarHuecos.FlatAppearance.BorderColor = Color.FromArgb(187, 247, 208)
+        Dim tipCompactar As New ToolTip()
+        tipCompactar.SetToolTip(btnCompactarHuecos, "Compacta y renumera consecutivamente (1, 2, 3, 4...) los Elementos de los subensamblajes afectados, eliminando todos los saltos y huecos.")
+        AddHandler btnCompactarHuecos.Click, AddressOf BtnCompactarHuecos_Click
+        pnlGridToolbar.Controls.Add(btnCompactarHuecos)
 
         ' IMPORTANTE WinForms: Para que pnlGridToolbar (Dock.Top) quede arriba y _grid (Dock.Fill) ocupe
         ' el resto sin tapar los encabezados de columna, _grid debe procesarse después (BringToFront).
@@ -1417,10 +1439,9 @@ Public Class AsignarPadresDialog
             Dim partNum As String = ObtenerPartNumber(targetDoc, msName)
             Dim categoriaFab As String = If(isCom, "COM", ObtenerCategoriaFabricacion(targetDoc, isAsm))
 
-            ' Detección de condición de soldado
-            Dim docSoldado As Boolean = EsDocumentoSoldado(targetDoc)
-            Dim heredaSoldado As Boolean = (parentItem IsNot Nothing AndAlso parentItem.IsSoldado)
-            Dim esSoldadoInicial As Boolean = (docSoldado OrElse heredaSoldado)
+            ' Detección de condición de soldado (desactivado tick automático: inicia sin soldar)
+            ' El usuario seleccionará manualmente con el checkbox si aplica la condición de soldado o no.
+            Dim esSoldadoInicial As Boolean = False
 
             ' Detección de asignación previa de PADRE o código estructurado
             Dim currentPadreVal As String = ObtenerCustomProp(targetDoc, "PADRE")
@@ -1447,6 +1468,7 @@ Public Class AsignarPadresDialog
 
             Dim item As New ElementoPadreItem() With {
                 .Document = targetDoc,
+                .TargetBOMRow = row,
                 .ModelStateName = msName,
                 .DocumentPath = doc.FullFileName,
                 .FileName = IOPath.GetFileName(doc.FullFileName),
@@ -1601,10 +1623,8 @@ Public Class AsignarPadresDialog
             Dim isCom As Boolean = EsComponenteComercial(targetDoc, effectiveStruct)
             Dim categoriaFab As String = If(isCom, "COM", ObtenerCategoriaFabricacion(targetDoc, isAsm))
 
-            ' Detección de condición de soldado
-            Dim docSoldado As Boolean = EsDocumentoSoldado(targetDoc)
-            Dim heredaSoldado As Boolean = (parentItem IsNot Nothing AndAlso parentItem.IsSoldado)
-            Dim esSoldadoInicial As Boolean = (docSoldado OrElse heredaSoldado)
+            ' Detección de condición de soldado (desactivado tick automático: inicia sin soldar)
+            Dim esSoldadoInicial As Boolean = False
 
             ' Obtener número de elemento real desde el mapa de BOM si está disponible
             Dim bomItemNumber As String = Nothing
@@ -2506,6 +2526,25 @@ Public Class AsignarPadresDialog
             itemsFiltradosRama = ObtenerItemsDeRamaNodo(_filtroRamaSeleccionada)
         End If
 
+        ' Si el filtro de huecos está activo, determinar qué subensamblajes padres tienen huecos
+        Dim padresConHuecos As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+        If _mostrarSoloHuecos Then
+            Dim huecosList = DetectarHuecosElementosBOM()
+            For Each h In huecosList
+                padresConHuecos.Add(h.ParentCode)
+            Next
+        End If
+
+        If lblGridHeader IsNot Nothing Then
+            If _mostrarSoloHuecos Then
+                lblGridHeader.Text = "⚠️ FILTRO ACTIVO: Mostrando únicamente subensamblajes con huecos de numeración BOM (clic en botón para ver todo):"
+                lblGridHeader.ForeColor = Color.FromArgb(180, 83, 9)
+            Else
+                lblGridHeader.Text = "Componentes a procesar (Columna 'Inc.' define la selección para esta corrida):"
+                lblGridHeader.ForeColor = Color.FromArgb(51, 65, 85)
+            End If
+        End If
+
         ' Agrupar elementos para presentación: si el usuario ordenó por columna se respeta ese orden
         Dim itemsParaMostrar As New List(Of ElementoPadreItem)()
         If _sortColumn >= 0 Then
@@ -2519,6 +2558,14 @@ Public Class AsignarPadresDialog
         Dim rowToSelect As DataGridViewRow = Nothing
 
         For Each item In itemsParaMostrar
+            ' Filtro de sólo huecos si está activo
+            If _mostrarSoloHuecos Then
+                Dim keyPadre As String = If(Not String.IsNullOrEmpty(item.SuggestedPadre), item.SuggestedPadre, "ROOT")
+                If Not padresConHuecos.Contains(keyPadre) Then
+                    Continue For
+                End If
+            End If
+
             ' Filtro de rama de árbol
             If itemsFiltradosRama IsNot Nothing AndAlso Not itemsFiltradosRama.Contains(item) Then
                 Continue For
@@ -2637,7 +2684,13 @@ Public Class AsignarPadresDialog
         Try
             If btnAuditarHuecos Is Nothing Then Return
             Dim huecos = DetectarHuecosElementosBOM()
-            If huecos.Count > 0 Then
+
+            If _mostrarSoloHuecos Then
+                btnAuditarHuecos.Text = "👁️ Ver Todo (Filtro Activo)"
+                btnAuditarHuecos.BackColor = Color.FromArgb(254, 215, 170)
+                btnAuditarHuecos.ForeColor = Color.FromArgb(154, 52, 18)
+                btnAuditarHuecos.FlatAppearance.BorderColor = Color.FromArgb(251, 146, 60)
+            ElseIf huecos.Count > 0 Then
                 btnAuditarHuecos.Text = "⚠️ Huecos en BOM (" & huecos.Count.ToString() & ")"
                 btnAuditarHuecos.BackColor = Color.FromArgb(254, 243, 199)
                 btnAuditarHuecos.ForeColor = Color.FromArgb(180, 83, 9)
@@ -2647,6 +2700,19 @@ Public Class AsignarPadresDialog
                 btnAuditarHuecos.BackColor = Color.FromArgb(241, 245, 249)
                 btnAuditarHuecos.ForeColor = Color.FromArgb(71, 85, 105)
                 btnAuditarHuecos.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225)
+            End If
+
+            If btnCompactarHuecos IsNot Nothing Then
+                btnCompactarHuecos.Enabled = (huecos.Count > 0)
+                If huecos.Count > 0 Then
+                    btnCompactarHuecos.BackColor = Color.FromArgb(240, 253, 244)
+                    btnCompactarHuecos.ForeColor = Color.FromArgb(22, 101, 52)
+                    btnCompactarHuecos.FlatAppearance.BorderColor = Color.FromArgb(187, 247, 208)
+                Else
+                    btnCompactarHuecos.BackColor = Color.FromArgb(248, 250, 252)
+                    btnCompactarHuecos.ForeColor = Color.FromArgb(148, 163, 184)
+                    btnCompactarHuecos.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240)
+                End If
             End If
         Catch
         End Try
@@ -2973,11 +3039,14 @@ Public Class AsignarPadresDialog
     Private Sub Grid_CellDoubleClick(sender As Object, e As DataGridViewCellEventArgs)
         If e.RowIndex < 0 Then Return
         Dim colName As String = _grid.Columns(e.ColumnIndex).Name
-        If colName <> "ColInc" AndAlso colName <> "ColSoldado" Then
-            Dim item As ElementoPadreItem = TryCast(_grid.Rows(e.RowIndex).Tag, ElementoPadreItem)
-            If item IsNot Nothing Then
-                HacerZoom3D(item)
-            End If
+        Dim item As ElementoPadreItem = TryCast(_grid.Rows(e.RowIndex).Tag, ElementoPadreItem)
+        If item Is Nothing Then Return
+
+        If colName = "ColItem" Then
+            ' Doble clic en la celda Elemento abre el selector directo de número
+            AbrirDialogoCambiarElemento(item)
+        ElseIf colName <> "ColInc" AndAlso colName <> "ColSoldado" Then
+            HacerZoom3D(item)
         End If
     End Sub
 
@@ -3036,14 +3105,10 @@ Public Class AsignarPadresDialog
         ElseIf colName = "ColItem" Then
             Dim valStr As String = If(_grid.Rows(e.RowIndex).Cells(e.ColumnIndex).Value IsNot Nothing, _grid.Rows(e.RowIndex).Cells(e.ColumnIndex).Value.ToString().Trim(), "")
             If Not String.IsNullOrEmpty(valStr) Then
-                item.LocalItemNumber = valStr
-                Dim lastDot As Integer = item.ItemNumber.LastIndexOf("."c)
-                If lastDot >= 0 Then
-                    item.ItemNumber = item.ItemNumber.Substring(0, lastDot + 1) & valStr
-                Else
-                    item.ItemNumber = valStr
+                Dim cleanSegment As String = ObtenerUltimoSegmentoItemNumber(valStr)
+                If Not String.IsNullOrEmpty(cleanSegment) Then
+                    AsignarElementoAComponente(item, cleanSegment, desplazarPosteriores:=False)
                 End If
-                AutoNumerarElementos()
             End If
         End If
     End Sub
@@ -3170,41 +3235,335 @@ Public Class AsignarPadresDialog
     End Sub
 
     ''' <summary>
-    ''' Abre el diálogo de auditoría y resolución de huecos en la columna Elemento del BOM estructurado.
+    ''' Alterna el filtro en la grilla principal para aislar o restaurar la vista de los componentes y subensamblajes con huecos de numeración BOM.
     ''' </summary>
     Private Sub BtnAuditarHuecos_Click(sender As Object, e As EventArgs)
         Try
             Dim huecos = DetectarHuecosElementosBOM()
+
+            ' Si el filtro ya estaba activo, desactivarlo para volver a ver la lista completa
+            If _mostrarSoloHuecos Then
+                _mostrarSoloHuecos = False
+                RefrescarGrilla()
+                Return
+            End If
+
             If huecos.Count = 0 Then
                 MessageBox.Show(Me,
-                                "No se detectaron saltos en la columna de Elemento." & vbCrLf & vbCrLf &
+                                "✓ No se detectaron saltos en la columna de Elemento." & vbCrLf & vbCrLf &
                                 "Todas las secuencias de componentes bajo sus respectivos ensambles padres son continuas y completas.",
                                 "Secuencia de BOM Completa", MessageBoxButtons.OK, MessageBoxIcon.Information)
                 Return
             End If
 
-            Dim prevTopMost As Boolean = Me.TopMost
-            Try
-                ' Desactivar temporalmente TopMost en el formulario padre para que el diálogo secundario no quede atrapado detrás
-                Me.TopMost = False
+            ' Activar el filtro de huecos en la grilla principal
+            _mostrarSoloHuecos = True
+            RefrescarGrilla()
 
-                Using dlg As New ResolverHuecosBOMDialog(Me, _items)
-                    dlg.TopMost = True
-                    dlg.Owner = Me
-                    dlg.StartPosition = FormStartPosition.CenterParent
-                    Dim dr As DialogResult = dlg.ShowDialog(Me)
-                    If dr = DialogResult.OK OrElse dlg.CambiosRealizados Then
-                        AutoNumerarElementos()
-                        RefrescarGrilla()
-                    End If
-                End Using
-            Finally
-                Me.TopMost = If(chkTopMost IsNot Nothing AndAlso chkTopMost.Checked, True, prevTopMost)
-                HabilitarVentanaInventor()
-            End Try
         Catch ex As Exception
             MessageBox.Show(Me, "Error al auditar huecos en BOM: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
         End Try
+    End Sub
+
+    ''' <summary>
+    ''' Botón de acción rápida en la barra de herramientas: Compacta la numeración eliminando todos los huecos.
+    ''' </summary>
+    Private Sub BtnCompactarHuecos_Click(sender As Object, e As EventArgs)
+        Try
+            Dim huecos = DetectarHuecosElementosBOM()
+            If huecos.Count = 0 Then
+                MessageBox.Show(Me,
+                                "✓ No se detectaron huecos en el BOM." & vbCrLf & vbCrLf &
+                                "Todas las secuencias de componentes bajo sus respectivos ensambles padres son continuas.",
+                                "Secuencia Completa", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+
+            Dim totalHuecos = huecos.Count
+            Dim padresAfectados = huecos.Select(Function(h) h.ParentName).Distinct().ToList()
+            Dim detallePadres = String.Join(vbCrLf & " • ", padresAfectados)
+
+            Dim dr = MessageBox.Show(Me,
+                                     String.Format("Se detectaron {0} hueco(s) en la secuencia de Elementos BOM en los siguientes ensambles:" & vbCrLf & vbCrLf &
+                                                   " • {1}" & vbCrLf & vbCrLf &
+                                                   "¿Desea compactar y renumerar consecutivamente los elementos (1, 2, 3, 4...) eliminando todos los saltos?",
+                                                   totalHuecos, detallePadres),
+                                     "Compactar Elementos BOM",
+                                     MessageBoxButtons.YesNo,
+                                     MessageBoxIcon.Question)
+
+            If dr = DialogResult.Yes Then
+                Dim eliminados = CompactarHuecosElementosBOM()
+                MessageBox.Show(Me,
+                                String.Format("✓ Se compactaron los elementos con éxito." & vbCrLf & vbCrLf &
+                                              "Se reordenaron las secuencias numéricas y se eliminaron los huecos.",
+                                              eliminados),
+                                "Huecos Resueltos",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information)
+            End If
+        Catch ex As Exception
+            MessageBox.Show(Me, "Error al compactar huecos: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Compacta la secuencia de elementos en cada subensamblaje donde se hayan detectado huecos,
+    ''' renumerando consecutivamente (1, 2, 3, 4...) según el orden actual del BOM.
+    ''' Si se pasa 'soloPadreKey', compacta únicamente el subensamblaje indicado.
+    ''' </summary>
+    Public Function CompactarHuecosElementosBOM(Optional soloPadreKey As String = "") As Integer
+        Dim totalModificados As Integer = 0
+        Try
+            Dim huecos = DetectarHuecosElementosBOM()
+            If huecos.Count = 0 Then Return 0
+
+            ' Agrupar componentes por subensamblaje padre
+            Dim gruposPorPadre As New Dictionary(Of String, List(Of ElementoPadreItem))(StringComparer.OrdinalIgnoreCase)
+            For Each item In _items
+                If Not item.IsCommercial AndAlso Not item.IsContentCenter Then
+                    Dim keyPadre As String = If(Not String.IsNullOrEmpty(item.SuggestedPadre), item.SuggestedPadre, "ROOT")
+                    If Not String.IsNullOrEmpty(soloPadreKey) AndAlso Not String.Equals(keyPadre, soloPadreKey, StringComparison.OrdinalIgnoreCase) Then
+                        Continue For
+                    End If
+                    If Not gruposPorPadre.ContainsKey(keyPadre) Then
+                        gruposPorPadre(keyPadre) = New List(Of ElementoPadreItem)()
+                    End If
+                    gruposPorPadre(keyPadre).Add(item)
+                End If
+            Next
+
+            For Each kvp In gruposPorPadre
+                Dim subItems = kvp.Value
+                ' Solo procesar si este grupo tiene huecos
+                Dim tieneHuecosEsteGrupo = huecos.Any(Function(h) String.Equals(h.ParentCode, kvp.Key, StringComparison.OrdinalIgnoreCase))
+                If Not tieneHuecosEsteGrupo Then Continue For
+
+                ' Ordenar subItems según su Elemento actual
+                subItems.Sort(Function(a, b)
+                                  Dim numA As Integer = 0
+                                  Dim numB As Integer = 0
+                                  Dim cleanA = ObtenerUltimoSegmentoItemNumber(If(Not String.IsNullOrEmpty(a.LocalItemNumber), a.LocalItemNumber, a.ItemNumber))
+                                  Dim cleanB = ObtenerUltimoSegmentoItemNumber(If(Not String.IsNullOrEmpty(b.LocalItemNumber), b.LocalItemNumber, b.ItemNumber))
+                                  Integer.TryParse(cleanA, numA)
+                                  Integer.TryParse(cleanB, numB)
+                                  If numA <> numB Then Return numA.CompareTo(numB)
+                                  Return CompararItemNumbersBOM(a.ItemNumber, b.ItemNumber)
+                              End Function)
+
+                ' Asignar numeración consecutiva 1, 2, 3, 4...
+                Dim nuevoIndice As Integer = 1
+                For Each it In subItems
+                    Dim nuevoNumeroStr As String = nuevoIndice.ToString()
+                    Dim cleanActual = ObtenerUltimoSegmentoItemNumber(If(Not String.IsNullOrEmpty(it.LocalItemNumber), it.LocalItemNumber, it.ItemNumber))
+
+                    If cleanActual <> nuevoNumeroStr Then
+                        totalModificados += 1
+                        it.LocalItemNumber = nuevoNumeroStr
+                        Dim lastDot As Integer = it.ItemNumber.LastIndexOf("."c)
+                        If lastDot >= 0 Then
+                            it.ItemNumber = it.ItemNumber.Substring(0, lastDot + 1) & nuevoNumeroStr
+                        Else
+                            it.ItemNumber = nuevoNumeroStr
+                        End If
+                        it.ManualOverride = False
+                        it.Included = True
+                    End If
+
+                    nuevoIndice += 1
+                Next
+            Next
+
+            If totalModificados > 0 Then
+                AutoNumerarElementos()
+                ConstruirArbolJerarquico()
+                RefrescarGrilla()
+            End If
+        Catch ex As Exception
+            MessageBox.Show(Me, "Error al compactar huecos de BOM: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        End Try
+
+        Return totalModificados
+    End Function
+
+    ''' <summary>
+    ''' Maneja el clic derecho sobre las filas de la grilla para seleccionar y desplegar el menú contextual rápido.
+    ''' </summary>
+    Private Sub Grid_CellMouseDown(sender As Object, e As DataGridViewCellMouseEventArgs)
+        If e.Button = MouseButtons.Right AndAlso e.RowIndex >= 0 Then
+            _grid.ClearSelection()
+            _grid.Rows(e.RowIndex).Selected = True
+            _grid.CurrentCell = _grid.Rows(e.RowIndex).Cells(If(e.ColumnIndex >= 0, e.ColumnIndex, 0))
+            Dim item As ElementoPadreItem = TryCast(_grid.Rows(e.RowIndex).Tag, ElementoPadreItem)
+            If item IsNot Nothing Then
+                MostrarMenuContextualFila(item, Cursor.Position)
+            End If
+        End If
+    End Sub
+
+    ''' <summary>
+    ''' Despliega un menú contextual enriquecido sobre el componente seleccionado para resolver huecos y realizar acciones rápidas.
+    ''' </summary>
+    Private Sub MostrarMenuContextualFila(item As ElementoPadreItem, pos As Point)
+        Dim menu As New ContextMenuStrip()
+        menu.Font = New Font("Segoe UI", 9.0F)
+
+        Dim padreKey As String = If(Not String.IsNullOrEmpty(item.SuggestedPadre), item.SuggestedPadre, "ROOT")
+
+        ' Detectar todos los huecos faltantes que existen en este subensamblaje padre
+        Dim huecos = DetectarHuecosElementosBOM()
+        Dim huecosDeEstePadre = huecos.Where(Function(h) String.Equals(h.ParentCode, padreKey, StringComparison.OrdinalIgnoreCase)).OrderBy(Function(h) h.MissingNumber).ToList()
+
+        ' Opción 1: Asignar directamente a un hueco faltante (submenú con todos los huecos si hay más de 1)
+        If huecosDeEstePadre.Count = 1 Then
+            Dim missingNum As Integer = huecosDeEstePadre(0).MissingNumber
+            Dim itemCerrarHueco As New ToolStripMenuItem(String.Format("⚡ Asignar al hueco faltante (Elemento #{0})", missingNum)) With {
+                .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
+                .ForeColor = Color.FromArgb(180, 83, 9)
+            }
+            AddHandler itemCerrarHueco.Click, Sub()
+                                                  AsignarElementoAComponente(item, missingNum.ToString(), desplazarPosteriores:=False)
+                                              End Sub
+            menu.Items.Add(itemCerrarHueco)
+        ElseIf huecosDeEstePadre.Count > 1 Then
+            Dim menuHuecos As New ToolStripMenuItem("⚡ Asignar a hueco faltante") With {
+                .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
+                .ForeColor = Color.FromArgb(180, 83, 9)
+            }
+            For Each h In huecosDeEstePadre
+                Dim targetMissing As Integer = h.MissingNumber
+                Dim subItem As New ToolStripMenuItem(String.Format("📌 Elemento #{0} (Hueco en '{1}')", targetMissing, padreKey))
+                AddHandler subItem.Click, Sub()
+                                              AsignarElementoAComponente(item, targetMissing.ToString(), desplazarPosteriores:=False)
+                                          End Sub
+                menuHuecos.DropDownItems.Add(subItem)
+            Next
+            menu.Items.Add(menuHuecos)
+        End If
+
+        ' Opción 2: Selector / Cambio directo de número
+        Dim itemCambiarDirecto As New ToolStripMenuItem("✏️ Seleccionar / Cambiar número de Elemento...") With {
+            .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold)
+        }
+        AddHandler itemCambiarDirecto.Click, Sub()
+                                                 AbrirDialogoCambiarElemento(item)
+                                             End Sub
+        menu.Items.Add(itemCambiarDirecto)
+
+        menu.Items.Add(New ToolStripSeparator())
+
+        ' Opción 3: Compactar este subensamblaje
+        Dim itemCompactarPadre As New ToolStripMenuItem(String.Format("⚡ Compactar numeración de este ensamble ('{0}')", padreKey))
+        AddHandler itemCompactarPadre.Click, Sub()
+                                                 Dim cant = CompactarHuecosElementosBOM(soloPadreKey:=padreKey)
+                                                 If cant > 0 Then
+                                                     MessageBox.Show(Me, String.Format("Se compactaron los elementos del ensamble '{0}'.", padreKey), "Compactación Finalizada", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                                                 Else
+                                                     MessageBox.Show(Me, String.Format("El ensamble '{0}' ya tiene numeración continua sin huecos.", padreKey), "Sin Huecos", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                                                 End If
+                                             End Sub
+        menu.Items.Add(itemCompactarPadre)
+
+        ' Opción 4: Compactar todo el proyecto
+        Dim itemCompactarTodo As New ToolStripMenuItem("⚡ Compactar todos los huecos del proyecto")
+        AddHandler itemCompactarTodo.Click, Sub()
+                                                BtnCompactarHuecos_Click(Nothing, Nothing)
+                                            End Sub
+        menu.Items.Add(itemCompactarTodo)
+
+        menu.Items.Add(New ToolStripSeparator())
+
+        ' Opción 5: Toggle de filtro de huecos
+        Dim itemFiltrar As New ToolStripMenuItem("👁️ Ver sólo componentes con huecos") With {
+            .Checked = _mostrarSoloHuecos
+        }
+        AddHandler itemFiltrar.Click, Sub()
+                                          _mostrarSoloHuecos = Not _mostrarSoloHuecos
+                                          RefrescarGrilla()
+                                      End Sub
+        menu.Items.Add(itemFiltrar)
+
+        menu.Items.Add(New ToolStripSeparator())
+
+        ' Opción 6: Zoom 3D
+        Dim itemZoom As New ToolStripMenuItem("🎯 Centrar en 3D (Zoom)")
+        AddHandler itemZoom.Click, Sub()
+                                       HacerZoom3D(item)
+                                   End Sub
+        menu.Items.Add(itemZoom)
+
+        ' Opción 7: Abrir
+        Dim itemAbrir As New ToolStripMenuItem("📂 Abrir componente")
+        AddHandler itemAbrir.Click, Sub()
+                                        AbrirElemento(item)
+                                    End Sub
+        menu.Items.Add(itemAbrir)
+
+        menu.Show(pos)
+    End Sub
+
+    ''' <summary>
+    ''' Asigna un nuevo número de elemento a un componente, actualizando su posición jerárquica y propuesta.
+    ''' Si 'desplazarPosteriores' es True, desplaza hacia adelante los componentes siguientes para evitar colisiones.
+    ''' </summary>
+    Public Sub AsignarElementoAComponente(item As ElementoPadreItem, nuevoNumStr As String, desplazarPosteriores As Boolean)
+        If item Is Nothing OrElse String.IsNullOrEmpty(nuevoNumStr) Then Return
+
+        Dim targetNum As Integer = 0
+        Dim cleanTarget As String = ObtenerUltimoSegmentoItemNumber(nuevoNumStr)
+        If Not Integer.TryParse(cleanTarget, targetNum) OrElse targetNum <= 0 Then Return
+
+        Dim padreKey As String = If(Not String.IsNullOrEmpty(item.SuggestedPadre), item.SuggestedPadre, "ROOT")
+
+        If desplazarPosteriores Then
+            For Each otherItem In _items
+                If otherItem IsNot item AndAlso Not otherItem.IsCommercial AndAlso Not otherItem.IsContentCenter Then
+                    Dim otherPadre As String = If(Not String.IsNullOrEmpty(otherItem.SuggestedPadre), otherItem.SuggestedPadre, "ROOT")
+                    If String.Equals(otherPadre, padreKey, StringComparison.OrdinalIgnoreCase) Then
+                        Dim otherClean = ObtenerUltimoSegmentoItemNumber(If(Not String.IsNullOrEmpty(otherItem.LocalItemNumber), otherItem.LocalItemNumber, otherItem.ItemNumber))
+                        Dim otherNum As Integer = 0
+                        If Integer.TryParse(otherClean, otherNum) AndAlso otherNum >= targetNum Then
+                            Dim nextNumStr = (otherNum + 1).ToString()
+                            otherItem.LocalItemNumber = nextNumStr
+                            Dim oLastDot = otherItem.ItemNumber.LastIndexOf("."c)
+                            If oLastDot >= 0 Then
+                                otherItem.ItemNumber = otherItem.ItemNumber.Substring(0, oLastDot + 1) & nextNumStr
+                            Else
+                                otherItem.ItemNumber = nextNumStr
+                            End If
+                        End If
+                    End If
+                End If
+            Next
+        End If
+
+        ' Asignar al item objetivo
+        item.LocalItemNumber = cleanTarget
+        Dim lastDot = item.ItemNumber.LastIndexOf("."c)
+        If lastDot >= 0 Then
+            item.ItemNumber = item.ItemNumber.Substring(0, lastDot + 1) & cleanTarget
+        Else
+            item.ItemNumber = cleanTarget
+        End If
+
+        item.ManualOverride = False
+        item.Included = True
+
+        AutoNumerarElementos()
+        ConstruirArbolJerarquico()
+        RefrescarGrilla()
+    End Sub
+
+    ''' <summary>
+    ''' Abre el diálogo selector rápido para cambiar el número de elemento o asignarlo a un hueco directamente.
+    ''' </summary>
+    Public Sub AbrirDialogoCambiarElemento(item As ElementoPadreItem)
+        If item Is Nothing Then Return
+        Using dlg As New CambiarNumeroElementoDialog(Me, item)
+            If dlg.ShowDialog(Me) = DialogResult.OK AndAlso Not String.IsNullOrEmpty(dlg.NuevoNumero) Then
+                AsignarElementoAComponente(item, dlg.NuevoNumero, dlg.DesplazarPosteriores)
+            End If
+        End Using
     End Sub
 
     Private Sub BtnZoom_Click(sender As Object, e As EventArgs)
@@ -3364,6 +3723,13 @@ Public Class AsignarPadresDialog
                 If item.IsSoldado Then
                     SetCustomProp(targetDoc, "SOLDADO", "✓")
                     changed = True
+                Else
+                    ' Si el componente no está marcado como soldado, limpiar la propiedad si existía
+                    Dim propSoldado As String = ObtenerCustomProp(targetDoc, "SOLDADO")
+                    If Not String.IsNullOrEmpty(propSoldado) Then
+                        SetCustomProp(targetDoc, "SOLDADO", "")
+                        changed = True
+                    End If
                 End If
 
                 If changed Then
@@ -3375,12 +3741,24 @@ Public Class AsignarPadresDialog
                 End If
             Next
 
+            ' 6. Sincronizar directamente los números de Elemento (ItemNumber) en la Lista de Materiales (LDM / BOM)
+            ' estructurada nativa de Autodesk Inventor para que los huecos queden formalmente resueltos en Inventor
+            Dim bomRowsUpdated As Integer = 0
+            Try
+                bomRowsUpdated = SincronizarElementosEnBOMInventor(_items)
+            Catch exBOM As Exception
+            End Try
+
             oTrans.End()
             LimpiarResaltado()
 
-            MessageBox.Show(String.Format("¡Numeración completada con éxito!" & vbCrLf & vbCrLf &
-                                          "Archivos actualizados: {0}", modCount),
-                            "ASIGNAR PADRES", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Try : _asmDoc.Update() : Catch : End Try
+
+            Dim mensajeFinal As String = String.Format("¡Numeración completada con éxito!" & vbCrLf & vbCrLf &
+                                                       "• Archivos actualizados (iProperties): {0}" & vbCrLf &
+                                                       "• Filas de Elemento sincronizadas en LDM estructurada de Inventor: {1}",
+                                                       modCount, bomRowsUpdated)
+            MessageBox.Show(mensajeFinal, "ASIGNAR PADRES", MessageBoxButtons.OK, MessageBoxIcon.Information)
             Me.DialogResult = DialogResult.OK
             Me.Close()
         Catch ex As Exception
@@ -3389,6 +3767,113 @@ Public Class AsignarPadresDialog
             End If
             MessageBox.Show("Error durante la aplicación de códigos: " & ex.Message, "Error en Asignar Padres", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
+    End Sub
+
+    ''' <summary>
+    ''' Sincroniza y escribe directamente los números de Elemento (ItemNumber) reasignados o compactados
+    ''' en las filas de la Lista de Materiales (LDM / BOM) estructurada nativa de Autodesk Inventor.
+    ''' Resuelve colisiones transitorias de números mediante una estrategia segura en dos fases.
+    ''' </summary>
+    Private Function SincronizarElementosEnBOMInventor(items As List(Of ElementoPadreItem)) As Integer
+        Dim countActualizados As Integer = 0
+        If items Is Nothing OrElse items.Count = 0 Then Return 0
+
+        ' 1. Identificar filas BOM cuyo número de Elemento debe actualizarse
+        Dim filasAModificar As New List(Of KeyValuePair(Of BOMRow, String))()
+
+        For Each item In items
+            Dim cleanLocal As String = ObtenerUltimoSegmentoItemNumber(If(Not String.IsNullOrEmpty(item.LocalItemNumber), item.LocalItemNumber, item.ItemNumber))
+            If String.IsNullOrEmpty(cleanLocal) Then Continue For
+
+            If item.TargetBOMRow IsNot Nothing Then
+                Dim numActualEnBOM As String = ""
+                Try : numActualEnBOM = item.TargetBOMRow.ItemNumber : Catch : End Try
+                Dim cleanActualBOM = ObtenerUltimoSegmentoItemNumber(numActualEnBOM)
+                If Not String.Equals(cleanActualBOM, cleanLocal, StringComparison.OrdinalIgnoreCase) Then
+                    filasAModificar.Add(New KeyValuePair(Of BOMRow, String)(item.TargetBOMRow, cleanLocal))
+                End If
+            End If
+        Next
+
+        ' Si hay items que no tenían TargetBOMRow directa (ej: cargados por fallback), asociar desde la vista estructurada
+        Dim itemsSinBOMRow = items.Where(Function(i) i.TargetBOMRow Is Nothing).ToList()
+        If itemsSinBOMRow.Count > 0 Then
+            Try
+                Dim compDef As AssemblyComponentDefinition = TryCast(_asmDoc.ComponentDefinition, AssemblyComponentDefinition)
+                Dim structView As BOMView = ObtenerBOMViewEstructurado(compDef)
+                If structView IsNot Nothing AndAlso structView.BOMRows IsNot Nothing Then
+                    AsociarYBOMRowsRecursivo(structView.BOMRows, itemsSinBOMRow, filasAModificar)
+                End If
+            Catch
+            End Try
+        End If
+
+        If filasAModificar.Count = 0 Then Return 0
+
+        ' Fase 1: Intentar asignación directa. Si Inventor rechaza por conflicto temporal de número duplicado
+        ' (colisión en el mismo subensamblaje), asignar temporalmente un número libre alto y programar reintento.
+        Dim reintentos As New List(Of KeyValuePair(Of BOMRow, String))()
+        Dim tempCounter As Integer = 99000
+
+        For Each kvp In filasAModificar
+            Dim row As BOMRow = kvp.Key
+            Dim targetNum As String = kvp.Value
+            Try
+                row.ItemNumber = targetNum
+                countActualizados += 1
+            Catch exConflict As Exception
+                Try
+                    tempCounter += 1
+                    row.ItemNumber = tempCounter.ToString()
+                    reintentos.Add(kvp)
+                Catch
+                End Try
+            End Try
+        Next
+
+        ' Fase 2: Aplicar los números definitivos a las filas temporales
+        For Each reint In reintentos
+            Try
+                reint.Key.ItemNumber = reint.Value
+                countActualizados += 1
+            Catch
+            End Try
+        Next
+
+        Return countActualizados
+    End Function
+
+    Private Sub AsociarYBOMRowsRecursivo(rows As BOMRowsEnumerator, itemsSinBOMRow As List(Of ElementoPadreItem), ByRef filasAModificar As List(Of KeyValuePair(Of BOMRow, String)))
+        If rows Is Nothing Then Return
+        For Each row As BOMRow In rows
+            Try
+                If row.ComponentDefinitions IsNot Nothing AndAlso row.ComponentDefinitions.Count > 0 Then
+                    Dim cd As ComponentDefinition = row.ComponentDefinitions.Item(1)
+                    Dim d As Document = cd.Document
+                    If d IsNot Nothing Then
+                        Dim ms As String = ObtenerModelStateNameDeCompDef(cd)
+                        For Each it In itemsSinBOMRow
+                            If it.TargetBOMRow Is Nothing AndAlso String.Equals(it.DocumentPath, d.FullFileName, StringComparison.OrdinalIgnoreCase) Then
+                                If String.IsNullOrEmpty(ms) OrElse String.Equals(it.ModelStateName, ms, StringComparison.OrdinalIgnoreCase) Then
+                                    it.TargetBOMRow = row
+                                    Dim cleanLocal As String = ObtenerUltimoSegmentoItemNumber(If(Not String.IsNullOrEmpty(it.LocalItemNumber), it.LocalItemNumber, it.ItemNumber))
+                                    Dim cleanActualBOM = ObtenerUltimoSegmentoItemNumber(row.ItemNumber)
+                                    If Not String.Equals(cleanActualBOM, cleanLocal, StringComparison.OrdinalIgnoreCase) Then
+                                        filasAModificar.Add(New KeyValuePair(Of BOMRow, String)(row, cleanLocal))
+                                    End If
+                                    Exit For
+                                End If
+                            End If
+                        Next
+                    End If
+                End If
+
+                If row.ChildRows IsNot Nothing AndAlso row.ChildRows.Count > 0 Then
+                    AsociarYBOMRowsRecursivo(row.ChildRows, itemsSinBOMRow, filasAModificar)
+                End If
+            Catch
+            End Try
+        Next
     End Sub
 
     ' =====================================================================
@@ -3570,7 +4055,7 @@ Public Class ResolverHuecosBOMDialog
 
     Private Sub InitializeCustomComponents()
         Me.Text = "Resolver Huecos en Sucesión de Elementos de BOM"
-        Me.Size = New Size(620, 390)
+        Me.Size = New Size(620, 420)
         Me.StartPosition = FormStartPosition.CenterParent
         Me.FormBorderStyle = FormBorderStyle.FixedDialog
         Me.MaximizeBox = False
@@ -3663,8 +4148,6 @@ Public Class ResolverHuecosBOMDialog
         }
         pnlBody.Controls.Add(lblDetalleHueco)
 
-        Me.Controls.Add(pnlBody)
-
         ' Panel inferior con botones: Cancelar, Aceptar y Aplicar
         Dim pnlBottom As New Panel() With {
             .Dock = DockStyle.Bottom,
@@ -3731,6 +4214,11 @@ Public Class ResolverHuecosBOMDialog
         Me.CancelButton = btnCancelar
 
         Me.Controls.Add(pnlBottom)
+        Me.Controls.Add(pnlHeader)
+        Me.Controls.Add(pnlBody)
+        pnlBottom.BringToFront()
+        pnlHeader.BringToFront()
+        pnlBody.BringToFront()
     End Sub
 
     Public Sub CargarHuecos()
@@ -3865,4 +4353,190 @@ Public Class ResolverHuecosBOMDialog
         End Function
     End Class
 End Class
+
+''' <summary>
+''' Diálogo ágil y directo para seleccionar o escribir el número de Elemento BOM para un componente,
+''' mostrando accesos directos con un clic a todos los huecos faltantes detectados en su ensamble padre.
+''' </summary>
+Public Class CambiarNumeroElementoDialog
+    Inherits Form
+
+    Private ReadOnly _item As ElementoPadreItem
+    Private ReadOnly _parentDialog As AsignarPadresDialog
+    Private txtNumero As WinTextBox
+    Private chkDesplazar As CheckBox
+    Public Property NuevoNumero As String = ""
+    Public Property DesplazarPosteriores As Boolean = False
+
+    Public Sub New(parentDialog As AsignarPadresDialog, item As ElementoPadreItem)
+        _parentDialog = parentDialog
+        _item = item
+        InitializeComponentCustom()
+    End Sub
+
+    Private Sub InitializeComponentCustom()
+        Me.Text = "Asignar / Cambiar Número de Elemento BOM"
+        Me.Size = New Size(490, 320)
+        Me.StartPosition = FormStartPosition.CenterParent
+        Me.FormBorderStyle = FormBorderStyle.FixedDialog
+        Me.MaximizeBox = False
+        Me.MinimizeBox = False
+        Me.ShowInTaskbar = False
+        Me.TopMost = True
+        Me.BackColor = Color.FromArgb(248, 250, 252)
+        Me.Font = New Font("Segoe UI", 9.0F)
+
+        Dim padreKey As String = If(Not String.IsNullOrEmpty(_item.SuggestedPadre), _item.SuggestedPadre, "ROOT")
+        Dim cleanActual As String = _parentDialog.ObtenerUltimoSegmentoItemNumber(If(Not String.IsNullOrEmpty(_item.LocalItemNumber), _item.LocalItemNumber, _item.ItemNumber))
+
+        ' Info Header
+        Dim lblComp As New Label() With {
+            .Text = "Componente: " & _item.DisplayName,
+            .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
+            .ForeColor = Color.FromArgb(15, 23, 42),
+            .Location = New Point(16, 12),
+            .Size = New Size(440, 20)
+        }
+        Me.Controls.Add(lblComp)
+
+        Dim lblPadre As New Label() With {
+            .Text = String.Format("Ensamble Padre: {0}   |   Elemento actual: {1}", padreKey, If(Not String.IsNullOrEmpty(_item.ItemNumber), _item.ItemNumber, cleanActual)),
+            .Font = New Font("Segoe UI", 8.5F),
+            .ForeColor = Color.FromArgb(100, 116, 139),
+            .Location = New Point(16, 34),
+            .Size = New Size(440, 18)
+        }
+        Me.Controls.Add(lblPadre)
+
+        ' Detectar huecos de este padre
+        Dim huecos = _parentDialog.DetectarHuecosElementosBOM()
+        Dim huecosPadre = huecos.Where(Function(h) String.Equals(h.ParentCode, padreKey, StringComparison.OrdinalIgnoreCase)).OrderBy(Function(h) h.MissingNumber).ToList()
+
+        Dim lblHuecosTitle As New Label() With {
+            .Text = If(huecosPadre.Count > 0, "Huecos faltantes en este ensamble (clic para asignar directo):", "Secuencia continua (sin huecos faltantes):"),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .ForeColor = If(huecosPadre.Count > 0, Color.FromArgb(180, 83, 9), Color.FromArgb(71, 85, 105)),
+            .Location = New Point(16, 62),
+            .AutoSize = True
+        }
+        Me.Controls.Add(lblHuecosTitle)
+
+        Dim pnlBotonesHuecos As New FlowLayoutPanel() With {
+            .Location = New Point(16, 84),
+            .Size = New Size(440, 38),
+            .AutoScroll = True,
+            .WrapContents = False
+        }
+
+        If huecosPadre.Count > 0 Then
+            For Each h In huecosPadre
+                Dim missingVal As Integer = h.MissingNumber
+                Dim btnH As New Button() With {
+                    .Text = "📌 Elemento #" & missingVal,
+                    .Size = New Size(125, 28),
+                    .BackColor = Color.FromArgb(254, 243, 199),
+                    .ForeColor = Color.FromArgb(180, 83, 9),
+                    .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+                    .FlatStyle = FlatStyle.Flat,
+                    .Cursor = Cursors.Hand
+                }
+                btnH.FlatAppearance.BorderColor = Color.FromArgb(252, 211, 77)
+                AddHandler btnH.Click, Sub()
+                                           txtNumero.Text = missingVal.ToString()
+                                           Me.NuevoNumero = missingVal.ToString()
+                                           Me.DesplazarPosteriores = chkDesplazar.Checked
+                                           Me.DialogResult = DialogResult.OK
+                                           Me.Close()
+                                       End Sub
+                pnlBotonesHuecos.Controls.Add(btnH)
+            Next
+        Else
+            Dim lblSinHuecos As New Label() With {
+                .Text = "✓ Todos los números de elemento en este ensamble son consecutivos.",
+                .ForeColor = Color.FromArgb(22, 101, 52),
+                .Font = New Font("Segoe UI", 8.5F, FontStyle.Italic),
+                .AutoSize = True,
+                .Margin = New Padding(0, 6, 0, 0)
+            }
+            pnlBotonesHuecos.Controls.Add(lblSinHuecos)
+        End If
+        Me.Controls.Add(pnlBotonesHuecos)
+
+        ' Manual entry
+        Dim lblManual As New Label() With {
+            .Text = "O escriba el nuevo número de elemento:",
+            .Font = New Font("Segoe UI", 8.5F),
+            .ForeColor = Color.FromArgb(51, 65, 85),
+            .Location = New Point(16, 130),
+            .AutoSize = True
+        }
+        Me.Controls.Add(lblManual)
+
+        txtNumero = New WinTextBox() With {
+            .Location = New Point(16, 152),
+            .Size = New Size(100, 24),
+            .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold),
+            .Text = If(huecosPadre.Count > 0, huecosPadre(0).MissingNumber.ToString(), cleanActual)
+        }
+        Me.Controls.Add(txtNumero)
+
+        chkDesplazar = New CheckBox() With {
+            .Text = "Desplazar elementos posteriores hacia adelante (evitar colisión)",
+            .Location = New Point(126, 152),
+            .Size = New Size(330, 24),
+            .Font = New Font("Segoe UI", 8.5F),
+            .ForeColor = Color.FromArgb(71, 85, 105),
+            .Checked = False
+        }
+        Me.Controls.Add(chkDesplazar)
+
+        ' Bottom Panel
+        Dim pnlBottom As New Panel() With {
+            .Dock = DockStyle.Bottom,
+            .Height = 48,
+            .BackColor = Color.FromArgb(241, 245, 249)
+        }
+        Dim sep As New Panel() With {.Dock = DockStyle.Top, .Height = 1, .BackColor = Color.FromArgb(226, 232, 240)}
+        pnlBottom.Controls.Add(sep)
+
+        Dim btnOk As New Button() With {
+            .Text = "Aceptar",
+            .Size = New Size(90, 30),
+            .Location = New Point(268, 9),
+            .BackColor = Color.FromArgb(2, 132, 199),
+            .ForeColor = Color.White,
+            .Font = New Font("Segoe UI", 9.0F, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .DialogResult = DialogResult.OK
+        }
+        btnOk.FlatAppearance.BorderSize = 0
+        AddHandler btnOk.Click, Sub()
+                                    Me.NuevoNumero = txtNumero.Text.Trim()
+                                    Me.DesplazarPosteriores = chkDesplazar.Checked
+                                    Me.Close()
+                                End Sub
+        pnlBottom.Controls.Add(btnOk)
+
+        Dim btnCanc As New Button() With {
+            .Text = "Cancelar",
+            .Size = New Size(90, 30),
+            .Location = New Point(368, 9),
+            .BackColor = Color.White,
+            .ForeColor = Color.FromArgb(51, 65, 85),
+            .Font = New Font("Segoe UI", 9.0F),
+            .FlatStyle = FlatStyle.Flat,
+            .DialogResult = DialogResult.Cancel
+        }
+        btnCanc.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225)
+        AddHandler btnCanc.Click, Sub()
+                                      Me.Close()
+                                  End Sub
+        pnlBottom.Controls.Add(btnCanc)
+
+        Me.AcceptButton = btnOk
+        Me.CancelButton = btnCanc
+        Me.Controls.Add(pnlBottom)
+    End Sub
+End Class
+
 
