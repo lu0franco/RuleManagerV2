@@ -801,21 +801,61 @@ Public Class SeleccionBaseDialog
     ' =========================================================
 
     Private Sub OnNuevoEspesorClicked(sender As Object, e As EventArgs)
-        Dim input As String = Microsoft.VisualBasic.Interaction.InputBox(
-            "Ingrese el nuevo espesor de chapa en milímetros (ej: 4.5):",
-            "Inyectar Regla de Chapa", "4.5")
+        Dim esPulgadasActual As Boolean = _rdoPulgadas.Checked
+        Dim prompt As String
+        Dim defaultVal As String
+        Dim titulo As String
 
+        If esPulgadasActual Then
+            prompt = "Ingrese el nuevo espesor de chapa en pulgadas (ej: 1/8"", 3/16"" o 1 1/4""):" & vbCrLf &
+                     "La medida en milímetros se calculará automáticamente entre paréntesis para la regla."
+            defaultVal = "1/8"""
+            titulo = "Inyectar Regla de Chapa (Pulgadas)"
+        Else
+            prompt = "Ingrese el nuevo espesor de chapa en milímetros (ej: 4.5) o en pulgadas (ej: 1/8""):" & vbCrLf &
+                     "Si ingresa en pulgadas, la equivalencia en mm se calculará automáticamente."
+            defaultVal = "4.5"
+            titulo = "Inyectar Regla de Chapa"
+        End If
+
+        Dim input As String = Microsoft.VisualBasic.Interaction.InputBox(prompt, titulo, defaultVal)
         If String.IsNullOrWhiteSpace(input) Then Exit Sub
 
-        Dim num As Double
-        If Double.TryParse(input.Replace(","c, "."c), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, num) Then
-            Dim nombreRegla As String = num.ToString() & "mm"
-            _engine.InyectarNuevoEspesorChapa(_doc, nombreRegla, num)
-            CargarEspesoresChapa()
-            _cmbEspesorChapa.SelectedItem = nombreRegla
-            MessageBox.Show("Regla de chapa '" & nombreRegla & "' creada e inyectada exitosamente.", "Inyección Exitosa", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        Dim nombreRegla As String = ""
+        Dim espesorMm As Double = 0.0
+        Dim esPulgadasDetectado As Boolean = False
+
+        If SeleccionBaseEngine.ParsearEspesorChapa(input, esPulgadasActual, nombreRegla, espesorMm, esPulgadasDetectado) Then
+            ' Si el usuario escribió pulgadas teniendo milímetros seleccionado (o viceversa), sincronizar radio button
+            If esPulgadasDetectado AndAlso Not _rdoPulgadas.Checked Then
+                _rdoPulgadas.Checked = True
+            ElseIf Not esPulgadasDetectado AndAlso Not _rdoMilimetros.Checked Then
+                _rdoMilimetros.Checked = True
+            End If
+
+            ' Inyectar regla físicamente en el documento y en la configuración persistente
+            Dim exito As Boolean = _engine.InyectarNuevoEspesorChapa(_doc, nombreRegla, espesorMm, esPulgadasDetectado)
+            If exito Then
+                CargarEspesoresChapa()
+                If _cmbEspesorChapa.Items.Contains(nombreRegla) Then
+                    _cmbEspesorChapa.SelectedItem = nombreRegla
+                Else
+                    _cmbEspesorChapa.Items.Add(nombreRegla)
+                    _cmbEspesorChapa.SelectedItem = nombreRegla
+                End If
+                ActualizarVistaPrevia()
+
+                MessageBox.Show("Regla de chapa '" & nombreRegla & "' creada con espesor " &
+                                espesorMm.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) &
+                                " mm e inyectada exitosamente en el catálogo y documento.",
+                                "Inyección Exitosa", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End If
         Else
-            MessageBox.Show("Formato numérico no válido.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            MessageBox.Show("Formato de espesor no válido." & vbCrLf & vbCrLf &
+                            "Ejemplos válidos:" & vbCrLf &
+                            "• Pulgadas: 1/8, 1/8"", 3/16"", 1 1/4"", 0.125""" & vbCrLf &
+                            "• Milímetros: 4.5, 4.5mm, 3.2",
+                            "Error de Validación", MessageBoxButtons.OK, MessageBoxIcon.Warning)
         End If
     End Sub
 

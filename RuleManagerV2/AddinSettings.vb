@@ -49,6 +49,7 @@ Public Class AddinSettings
 
     ' Catálogos persistentes inyectados
     Public Property EspesoresChapaInyectados As New List(Of String)
+    Public Property EspesoresChapaPulgInyectados As New List(Of String)
     Public Property EspesoresPlanchaInyectados As New List(Of String)
     Public Property DiametrosRedondoInyectados As New List(Of String)
     Public Property DimensionesCuadradoInyectados As New List(Of String)

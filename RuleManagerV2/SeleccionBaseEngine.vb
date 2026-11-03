@@ -335,41 +335,55 @@ Public Class SeleccionBaseEngine
     Public Function InyectarNuevoEspesorChapa(
         doc As Document,
         nombreRegla As String,
-        espesorMm As Double) As Boolean
+        espesorMm As Double,
+        Optional esPulgadas As Boolean = False) As Boolean
 
         Try
-            If doc.SubType <> SUBTYPE_SHEET_METAL Then
-                doc.SubType = SUBTYPE_SHEET_METAL
-            End If
-
-            Dim smDef As SheetMetalComponentDefinition = DirectCast(doc.ComponentDefinition, SheetMetalComponentDefinition)
-
-            ' Verificar si ya existe en el documento
-            For Each style As SheetMetalStyle In smDef.SheetMetalStyles
-                If style.Name.Equals(nombreRegla, StringComparison.OrdinalIgnoreCase) Then
-                    style.Activate()
-                    Return True
+            If doc IsNot Nothing Then
+                If doc.SubType <> SUBTYPE_SHEET_METAL Then
+                    doc.SubType = SUBTYPE_SHEET_METAL
                 End If
-            Next
 
-            ' Crear una nueva regla a partir de la activa o predeterminada
-            Dim baseStyle As SheetMetalStyle = smDef.ActiveSheetMetalStyle
-            If baseStyle Is Nothing AndAlso smDef.SheetMetalStyles.Count > 0 Then
-                baseStyle = smDef.SheetMetalStyles.Item(1)
-            End If
+                Dim smDef As SheetMetalComponentDefinition = DirectCast(doc.ComponentDefinition, SheetMetalComponentDefinition)
 
-            If baseStyle IsNot Nothing Then
-                Dim newStyle As SheetMetalStyle = baseStyle.Copy(nombreRegla)
-                ' En Inventor el espesor puede definirse mediante string con unidades
-                newStyle.Thickness = espesorMm.ToString(System.Globalization.CultureInfo.InvariantCulture) & " mm"
-                newStyle.Activate()
+                ' Verificar si ya existe en el documento
+                Dim styleExistente As SheetMetalStyle = Nothing
+                For Each style As SheetMetalStyle In smDef.SheetMetalStyles
+                    If style.Name.Equals(nombreRegla, StringComparison.OrdinalIgnoreCase) Then
+                        styleExistente = style
+                        Exit For
+                    End If
+                Next
+
+                If styleExistente IsNot Nothing Then
+                    styleExistente.Activate()
+                Else
+                    ' Crear una nueva regla a partir de la activa o predeterminada
+                    Dim baseStyle As SheetMetalStyle = smDef.ActiveSheetMetalStyle
+                    If baseStyle Is Nothing AndAlso smDef.SheetMetalStyles.Count > 0 Then
+                        baseStyle = smDef.SheetMetalStyles.Item(1)
+                    End If
+
+                    If baseStyle IsNot Nothing Then
+                        Dim newStyle As SheetMetalStyle = baseStyle.Copy(nombreRegla)
+                        ' En Inventor el espesor puede definirse mediante string con unidades
+                        newStyle.Thickness = espesorMm.ToString(System.Globalization.CultureInfo.InvariantCulture) & " mm"
+                        newStyle.Activate()
+                    End If
+                End If
             End If
 
             ' Persistir en configuración para proyectos futuros y anteriores
-            If Not AddinSettings.Current.EspesoresChapaInyectados.Contains(nombreRegla) Then
-                AddinSettings.Current.EspesoresChapaInyectados.Add(nombreRegla)
-                AddinSettings.Save()
+            If esPulgadas OrElse nombreRegla.Contains(""""c) Then
+                If Not AddinSettings.Current.EspesoresChapaPulgInyectados.Contains(nombreRegla) Then
+                    AddinSettings.Current.EspesoresChapaPulgInyectados.Add(nombreRegla)
+                End If
+            Else
+                If Not AddinSettings.Current.EspesoresChapaInyectados.Contains(nombreRegla) Then
+                    AddinSettings.Current.EspesoresChapaInyectados.Add(nombreRegla)
+                End If
             End If
+            AddinSettings.Save()
 
             Return True
         Catch ex As Exception
@@ -593,11 +607,20 @@ Public Class SeleccionBaseEngine
     End Function
 
     Public Function ObtenerEspesoresChapaPulg() As List(Of String)
-        Return New List(Of String) From {
-            "1/4"" (6.35mm)", "5/16"" (7.94mm)", "3/8"" (9.53mm)", "1/2"" (12.70mm)",
+        Dim lista As New List(Of String) From {
+            "1/8"" (3.18mm)", "1/4"" (6.35mm)", "5/16"" (7.94mm)", "3/8"" (9.53mm)", "1/2"" (12.70mm)",
             "5/8"" (15.88mm)", "3/4"" (19.10mm)", "7/8"" (22.22mm)", "1"" (25.4mm)",
             "1 1/4"" (31.75mm)", "1 1/2"" (38.1mm)"
         }
+        For Each esp In AddinSettings.Current.EspesoresChapaPulgInyectados
+            If Not lista.Contains(esp) Then lista.Add(esp)
+        Next
+        For Each esp In AddinSettings.Current.EspesoresChapaInyectados
+            If (esp.Contains(""""c) OrElse esp.ToLowerInvariant().Contains("pulg")) AndAlso Not lista.Contains(esp) Then
+                lista.Add(esp)
+            End If
+        Next
+        Return lista
     End Function
 
     Public Function ObtenerEspesoresPlancha() As List(Of String)
@@ -719,7 +742,22 @@ Public Class SeleccionBaseEngine
                     Exit Sub
                 End If
             Next
-            ' Si no existe, activar el primero disponible
+
+            ' Si no existe en el documento, intentar crearlo automáticamente a partir del espesor
+            Dim espesorCm As Double = ParsearMedidaEnCm(nombreEstilo)
+            If espesorCm > 0 AndAlso smDef.SheetMetalStyles.Count > 0 Then
+                Dim baseStyle As SheetMetalStyle = smDef.ActiveSheetMetalStyle
+                If baseStyle Is Nothing Then baseStyle = smDef.SheetMetalStyles.Item(1)
+                If baseStyle IsNot Nothing Then
+                    Dim newStyle As SheetMetalStyle = baseStyle.Copy(nombreEstilo)
+                    Dim espesorMm As Double = espesorCm * 10.0
+                    newStyle.Thickness = espesorMm.ToString(System.Globalization.CultureInfo.InvariantCulture) & " mm"
+                    newStyle.Activate()
+                    Exit Sub
+                End If
+            End If
+
+            ' Si no se pudo crear, activar el primero disponible
             If smDef.SheetMetalStyles.Count > 0 Then
                 smDef.SheetMetalStyles.Item(1).Activate()
             End If
@@ -792,6 +830,96 @@ Public Class SeleccionBaseEngine
     ' =========================================================
     ' PARSEO Y CONVERSIÓN DE MEDIDAS (REDONDO / CUADRADO)
     ' =========================================================
+    ' =========================================================
+    ' PARSER DE ESPESORES DE CHAPA (PULGADAS Y MILÍMETROS)
+    ' Admite formatos como "1/8", "1/8""", "3/16", "1 1/4""", "0.125", "4.5", "4.5mm"
+    ' y calcula automáticamente la medida entre paréntesis en mm para reglas en pulgadas.
+    ' =========================================================
+    Public Shared Function ParsearEspesorChapa(
+        input As String,
+        esPulgadasModo As Boolean,
+        ByRef nombreRegla As String,
+        ByRef espesorMm As Double,
+        ByRef esPulgadasDetectado As Boolean) As Boolean
+
+        If String.IsNullOrWhiteSpace(input) Then Return False
+        Dim raw As String = input.Trim()
+
+        Dim tieneComillas As Boolean = raw.Contains(""""c)
+        Dim tieneBarraFraccion As Boolean = raw.Contains("/"c)
+        Dim tieneMm As Boolean = raw.ToLowerInvariant().Contains("mm")
+        Dim tieneIn As Boolean = raw.ToLowerInvariant().Contains("in") OrElse raw.ToLowerInvariant().Contains("pulg")
+
+        esPulgadasDetectado = (esPulgadasModo OrElse tieneComillas OrElse tieneBarraFraccion OrElse tieneIn) AndAlso Not tieneMm
+
+        ' Si ya viene con formato completo: ej "1/8" (3.18mm)"
+        If raw.Contains("("c) AndAlso raw.Contains(")"c) Then
+            Dim cm = ParsearMedidaEnCm(raw)
+            If cm > 0 Then
+                espesorMm = cm * 10.0
+                nombreRegla = raw
+                Return True
+            End If
+        End If
+
+        If esPulgadasDetectado Then
+            Dim sPulg As String = raw.Replace(""""c, "").Replace("in", "").Replace("IN", "").Replace("pulg", "").Replace("PULG", "").Trim()
+            Dim pulgadasNum As Double = 0.0
+
+            ' Caso 1: Fracción mixta: ej "1 1/4" o "1-1/4"
+            Dim partesEspacio = sPulg.Split({" "c, "-"c}, StringSplitOptions.RemoveEmptyEntries)
+            If partesEspacio.Length = 2 AndAlso partesEspacio(1).Contains("/"c) Then
+                Dim entero As Double
+                Dim fracParts = partesEspacio(1).Split("/"c)
+                If Double.TryParse(partesEspacio(0), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, entero) AndAlso
+                   fracParts.Length = 2 Then
+                    Dim num As Double
+                    Dim den As Double
+                    If Double.TryParse(fracParts(0).Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, num) AndAlso
+                       Double.TryParse(fracParts(1).Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, den) AndAlso
+                       den <> 0 Then
+                        pulgadasNum = entero + (num / den)
+                    End If
+                End If
+                ' Caso 2: Fracción simple: ej "1/8"
+            ElseIf sPulg.Contains("/"c) Then
+                Dim fracParts = sPulg.Split("/"c)
+                If fracParts.Length = 2 Then
+                    Dim num As Double
+                    Dim den As Double
+                    If Double.TryParse(fracParts(0).Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, num) AndAlso
+                       Double.TryParse(fracParts(1).Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, den) AndAlso
+                       den <> 0 Then
+                        pulgadasNum = num / den
+                    End If
+                End If
+                ' Caso 3: Número decimal en pulgadas: ej "0.125"
+            Else
+                Double.TryParse(sPulg.Replace(","c, "."c), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, pulgadasNum)
+            End If
+
+            If pulgadasNum <= 0 Then Return False
+
+            ' 1 pulgada = 25.4 mm
+            espesorMm = pulgadasNum * 25.4
+            Dim mmRedondeado As Double = Math.Round(espesorMm, 2, MidpointRounding.AwayFromZero)
+            Dim mmTexto As String = mmRedondeado.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) & "mm"
+
+            ' Nombre estandarizado de la regla de chapa: ej 1/8" (3.18mm)
+            nombreRegla = sPulg & """" & " (" & mmTexto & ")"
+            Return True
+        Else
+            Dim sMm As String = raw.ToLowerInvariant().Replace("mm", "").Trim().Replace(","c, "."c)
+            Dim numMm As Double
+            If Double.TryParse(sMm, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, numMm) AndAlso numMm > 0 Then
+                espesorMm = numMm
+                nombreRegla = numMm.ToString(System.Globalization.CultureInfo.InvariantCulture) & "mm"
+                Return True
+            End If
+            Return False
+        End If
+    End Function
+
     Public Shared Function ExtraerMedidaLimpia(texto As String) As String
         If String.IsNullOrWhiteSpace(texto) Then Return "10mm"
         Dim inicio As Integer = texto.IndexOf("("c)
