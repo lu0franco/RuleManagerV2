@@ -85,19 +85,13 @@ Public Class Rules
         invApp As Inventor.Application)
 
         Try
-
-            Dim iLogicAuto As Object =
-                GetILogic(invApp)
-
-            iLogicAuto.RunExternalRule(
-                invApp.ActiveDocument,
-                "D:\Bibliotecas\Ilogic\Reglas\IAM\SEARCHSIMETRIAS.iLogicVb"
-            )
-
+            Dim engine As New SearchSimetriasEngine(invApp)
+            engine.Ejecutar()
         Catch ex As Exception
-
-            MsgBox(ex.ToString)
-
+            MessageBox.Show("Error al ejecutar búsqueda de simetrías: " & ex.Message,
+                            "Error - Búsqueda de Simetrías",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error)
         End Try
 
     End Sub
@@ -121,19 +115,13 @@ Public Class Rules
         invApp As Inventor.Application)
 
         Try
-
-            Dim iLogicAuto As Object =
-                GetILogic(invApp)
-
-            iLogicAuto.RunExternalRule(
-                invApp.ActiveDocument,
-                "D:\Bibliotecas\Ilogic\Reglas\IAM\RevisionTEXTO_CANTIDADES.iLogicVb"
-            )
-
+            Dim engine As New SearchSimetriasEngine(invApp)
+            engine.RevisarTextoCantidades()
         Catch ex As Exception
-
-            MsgBox(ex.ToString)
-
+            MessageBox.Show("Error en revisión de simetrías y cantidades: " & ex.Message,
+                            "Error - Revisión de Simetrías",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error)
         End Try
 
     End Sub

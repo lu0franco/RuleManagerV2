@@ -45,52 +45,20 @@ Public Class ContadorElementosEngine
             Dim asmDoc As AssemblyDocument = DirectCast(_invApp.ActiveDocument, AssemblyDocument)
 
             ' =========================================================
-            ' PASO 1: DETECTAR Y MARCAR SIMETRÍAS (RECURSIVO)
-            ' =========================================================
-            Dim simetricasLog As New List(Of String)
-            Dim listaSimetricas As New List(Of ComponentOccurrence)
-
-            FindMirrorOccurrencesRecursive(asmDoc.ComponentDefinition.Occurrences, simetricasLog, listaSimetricas)
-
-            ' Procesar las simetrías encontradas: Asignar Description='SIMETRIA' y corregir Part Number base
-            Dim procesadosSim As New Dictionary(Of String, Boolean)
+            ' PASO 1: DETECTAR Y MARCAR SIMETRÍAS (ANÁLISIS DE CONTORNOS)
             Dim nombresSimetriasUnicos As New List(Of String)
-
-            For Each occ As ComponentOccurrence In listaSimetricas
-                Try
-                    Dim doc As Document = occ.Definition.Document
-                    If doc Is Nothing Then Continue For
-
-                    Dim keyDoc As String = GetDocKey(doc)
-                    Dim nombreMostrar As String = doc.DisplayName
-
-                    If Not nombresSimetriasUnicos.Contains(nombreMostrar) Then
-                        nombresSimetriasUnicos.Add(nombreMostrar)
+            Try
+                Dim settings As AddinSettings = AddinSettings.Current
+                If settings Is Nothing OrElse settings.DetectarSimetriasAuto Then
+                    Dim simEngine As New SearchSimetriasEngine(_invApp)
+                    Dim resSim As SearchSimetriasEngine.ResultadoSimetria = simEngine.Ejecutar(mostrarDialogo:=False)
+                    If resSim IsNot Nothing AndAlso resSim.NombresUnicos IsNot Nothing Then
+                        nombresSimetriasUnicos = resSim.NombresUnicos
                     End If
-
-                    If procesadosSim.ContainsKey(keyDoc) Then Continue For
-
-                    ' Marcar descripción como SIMETRIA en Design Tracking Properties
-                    Try
-                        Dim stdProps As PropertySet = doc.PropertySets.Item("Design Tracking Properties")
-                        stdProps.Item("Description").Value = "SIMETRIA"
-                    Catch
-                    End Try
-
-                    ' Obtener Part Number original (quitando el espejo) para que agrupe con la derecha
-                    Dim originalPN As String = GetOriginalPartNumberFromOccurrence(occ)
-                    If Not String.IsNullOrEmpty(originalPN) Then
-                        Try
-                            Dim stdProps As PropertySet = doc.PropertySets.Item("Design Tracking Properties")
-                            stdProps.Item("Part Number").Value = originalPN
-                        Catch
-                        End Try
-                    End If
-
-                    procesadosSim(keyDoc) = True
-                Catch
-                End Try
-            Next
+                End If
+            Catch exSim As Exception
+                ' Continuar con conteo general si falla el paso de simetrías
+            End Try
 
             ' =========================================================
             ' PASO 2: CONTEO RECURSIVO DE OCURRENCIAS

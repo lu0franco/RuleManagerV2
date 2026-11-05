@@ -87,7 +87,7 @@ Public Class Buttons
         _buttonsData.Add(New ButtonData(
             "Buscar Simetrías",
             "BTN_SIM",
-            "Esta herramienta detectará simetrías utilizando la referencia de almacén...",
+            "Detecta piezas y ensamblajes simétricos mediante análisis paramétrico multinivel (derivadas espejo, patrones y transformaciones) y sincroniza sus descripciones y códigos de pieza.",
             "Assembly",
             AddressOf Rules.EjecutarSim,
             "icon_asm_sim_32x32.png"))

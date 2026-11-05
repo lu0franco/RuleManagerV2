@@ -157,6 +157,13 @@ Public Class AddinSettings
         Return New AddinSettings()
     End Function
 
+    ''' <summary>
+    ''' Alias en español para cargar la configuración actual.
+    ''' </summary>
+    Public Shared Function Cargar() As AddinSettings
+        Return Current
+    End Function
+
     Public Shared Sub Save()
         Try
             Dim xs As New XmlSerializer(GetType(AddinSettings))
@@ -170,6 +177,13 @@ Public Class AddinSettings
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning)
         End Try
+    End Sub
+
+    ''' <summary>
+    ''' Alias en español para guardar la configuración actual.
+    ''' </summary>
+    Public Shared Sub Guardar()
+        Save()
     End Sub
 
 End Class
